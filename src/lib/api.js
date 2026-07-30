@@ -1,7 +1,7 @@
 import axios from 'axios';
 import Cookies from 'js-cookie';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL;
 
 // Create the Axios instance
 export const api = axios.create({
@@ -83,7 +83,7 @@ api.interceptors.response.use(
       try {
         // Use a separate axios instance/request to bypass interceptors
         const res = await axios.post(`${API_BASE}/auth/refresh`, { refreshToken });
-        
+
         const newAccessToken = res.data.data.accessToken;
         const newRefreshToken = res.data.data.refreshToken;
 
@@ -141,12 +141,12 @@ export async function fetchApi(endpoint, options = {}) {
   } catch (error) {
     if (error.response) {
       // Return structured error mimicking our previous native fetchApi
-      return { 
-        success: false, 
-        error: { 
-          message: error.response.data?.error?.message || 'Server error', 
-          code: error.response.data?.error?.code 
-        } 
+      return {
+        success: false,
+        error: {
+          message: error.response.data?.error?.message || 'Server error',
+          code: error.response.data?.error?.code
+        }
       };
     }
     console.error('Axios Fetch Error:', error);
