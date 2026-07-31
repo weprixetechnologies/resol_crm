@@ -1,11 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { fetchApi } from '@/lib/api';
+import { fetchApi, api } from '@/lib/api';
 import Link from 'next/link';
 import { Search, Plus, ChevronLeft, ChevronRight, Loader2, UserPlus, Eye, AlertTriangle, Filter, X, Download } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import Cookies from 'js-cookie';
 
 export default function UsersPage() {
   const { user } = useAuth();
@@ -73,15 +72,8 @@ export default function UsersPage() {
         }
       });
       
-      const token = Cookies.get('token');
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
-      const response = await fetch(`${apiUrl}${url}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      if (!response.ok) throw new Error('Export failed');
-      
-      const blob = await response.blob();
+      const response = await api.get(url, { responseType: 'blob' });
+      const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const downloadUrl = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = downloadUrl;
@@ -91,7 +83,7 @@ export default function UsersPage() {
       a.remove();
       window.URL.revokeObjectURL(downloadUrl);
     } catch (err) {
-      console.error(err);
+      console.error('Export Error:', err);
       alert('Export failed. Please try again.');
     }
     setExporting(false);
