@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { fetchApi, api } from '@/lib/api';
 import Link from 'next/link';
-import { Search, Plus, ChevronLeft, ChevronRight, Loader2, UserPlus, Eye, AlertTriangle, Filter, X, Download } from 'lucide-react';
+import { Search, Plus, ChevronLeft, ChevronRight, Loader2, UserPlus, Eye, AlertTriangle, Filter, X, Download, Trash2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 export default function UsersPage() {
@@ -21,6 +21,13 @@ export default function UsersPage() {
   });
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+
+  // Selection & Bulk Deletion State
+  const [selectedUserIds, setSelectedUserIds] = useState([]);
+  const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
+  const [bulkDeleteReason, setBulkDeleteReason] = useState('');
+  const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
+  const [bulkDeleteError, setBulkDeleteError] = useState('');
 
   // Modal State for New Customer Data
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -118,6 +125,49 @@ export default function UsersPage() {
     }
   };
 
+  const selectableUsers = users.filter(u => u.is_deletion_requested !== 1);
+  const isAllSelected = selectableUsers.length > 0 && selectableUsers.every(u => selectedUserIds.includes(u.id));
+
+  const toggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedUserIds([]);
+    } else {
+      setSelectedUserIds(selectableUsers.map(u => u.id));
+    }
+  };
+
+  const toggleSelectUser = (id) => {
+    setSelectedUserIds(prev => 
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleBulkRequestDeletion = async (e) => {
+    e.preventDefault();
+    if (!bulkDeleteReason.trim()) {
+      setBulkDeleteError('Remarks / reason is required for requesting deletion');
+      return;
+    }
+    setBulkDeleteLoading(true);
+    setBulkDeleteError('');
+
+    const res = await fetchApi('/users/bulk-request-deletion', {
+      method: 'POST',
+      body: JSON.stringify({ ids: selectedUserIds, reason: bulkDeleteReason.trim() })
+    });
+
+    setBulkDeleteLoading(false);
+
+    if (res.success) {
+      setIsBulkDeleteModalOpen(false);
+      setBulkDeleteReason('');
+      setSelectedUserIds([]);
+      loadUsers();
+    } else {
+      setBulkDeleteError(res.error?.message || 'Failed to process bulk deletion request');
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -143,6 +193,40 @@ export default function UsersPage() {
           </button>
         </div>
       </div>
+
+      {/* Bulk Selection Bar */}
+      {selectedUserIds.length > 0 && (
+        <div className="bg-rose-50 border border-rose-200 p-3.5 px-5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between shadow-sm gap-3">
+          <div className="flex items-center space-x-2.5">
+            <span className="flex h-3 w-3 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-600"></span>
+            </span>
+            <span className="text-sm font-bold text-rose-900">
+              {selectedUserIds.length} customer(s) selected for deletion
+            </span>
+          </div>
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+            <button
+              onClick={() => setSelectedUserIds([])}
+              className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 rounded-xl shadow-xs transition-colors"
+            >
+              Clear Selection
+            </button>
+            <button
+              onClick={() => {
+                setBulkDeleteError('');
+                setBulkDeleteReason('');
+                setIsBulkDeleteModalOpen(true);
+              }}
+              className="inline-flex items-center px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs tracking-wide rounded-xl shadow-md transition-all transform active:scale-95 uppercase"
+            >
+              <Trash2 className="w-4 h-4 mr-1.5" />
+              REQUEST DELETION
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50/50">
@@ -299,6 +383,15 @@ export default function UsersPage() {
             <table className="min-w-full divide-y divide-slate-200">
               <thead className="bg-slate-50">
                 <tr>
+                  <th scope="col" className="px-4 py-4 w-10 text-center">
+                    <input
+                      type="checkbox"
+                      checked={isAllSelected}
+                      onChange={toggleSelectAll}
+                      disabled={selectableUsers.length === 0}
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-slate-300 rounded cursor-pointer disabled:opacity-30"
+                    />
+                  </th>
                   <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Name</th>
                   <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Contact</th>
                   <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Location</th>
@@ -310,11 +403,20 @@ export default function UsersPage() {
               <tbody className="bg-white divide-y divide-slate-100">
                 {users.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="px-6 py-12 text-center text-slate-500">No customer data found.</td>
+                    <td colSpan="7" className="px-6 py-12 text-center text-slate-500">No customer data found.</td>
                   </tr>
                 ) : (
                   users.map((u) => (
-                    <tr key={u.id} className="hover:bg-slate-50/80 transition-colors">
+                    <tr key={u.id} className={`hover:bg-slate-50/80 transition-colors ${selectedUserIds.includes(u.id) ? 'bg-indigo-50/40' : ''}`}>
+                      <td className="px-4 py-4 whitespace-nowrap text-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedUserIds.includes(u.id)}
+                          onChange={() => toggleSelectUser(u.id)}
+                          disabled={u.is_deletion_requested === 1}
+                          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-slate-300 rounded cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                        />
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           <div className="flex-shrink-0 h-10 w-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center font-bold">
@@ -500,6 +602,84 @@ export default function UsersPage() {
                     type="button"
                     onClick={() => setIsModalOpen(false)}
                     className="mt-3 w-full inline-flex justify-center rounded-xl border border-slate-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-slate-700 hover:bg-slate-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Deletion Modal */}
+      {isBulkDeleteModalOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="bulk-delete-title" role="dialog" aria-modal="true">
+          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm transition-opacity" onClick={() => setIsBulkDeleteModalOpen(false)}></div>
+            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+            <div className="relative z-10 inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+              <form onSubmit={handleBulkRequestDeletion}>
+                <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                  <div className="flex items-center space-x-3 mb-4">
+                    <div className="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 flex-shrink-0">
+                      <Trash2 className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-900" id="bulk-delete-title">
+                        Request Deletion ({selectedUserIds.length} selected)
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        This request will be sent to the admin approval queue.
+                      </p>
+                    </div>
+                  </div>
+
+                  {bulkDeleteError && (
+                    <div className="mb-4 p-3 bg-rose-50 text-rose-600 text-sm rounded-xl border border-rose-100 flex items-start">
+                      <AlertTriangle className="w-5 h-5 mr-2 flex-shrink-0" />
+                      <div>{bulkDeleteError}</div>
+                    </div>
+                  )}
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                        Remarks / Deletion Reason <span className="text-rose-500">*</span>
+                      </label>
+                      <textarea
+                        required
+                        rows="3"
+                        value={bulkDeleteReason}
+                        onChange={(e) => setBulkDeleteReason(e.target.value)}
+                        placeholder="Enter remarks or reason for deleting the selected customers..."
+                        className="w-full border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500"
+                      ></textarea>
+                      <p className="text-[11px] text-slate-500 mt-1">
+                        Add remarks one time for all selected customers.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse border-t border-slate-100 gap-2">
+                  <button
+                    type="submit"
+                    disabled={bulkDeleteLoading}
+                    className="w-full inline-flex justify-center rounded-xl border border-transparent shadow-sm px-4 py-2.5 bg-rose-600 text-sm font-bold text-white hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500 sm:w-auto disabled:opacity-70 uppercase tracking-wide"
+                  >
+                    {bulkDeleteLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Processing...
+                      </>
+                    ) : (
+                      'PROCESS REQUEST DELETION'
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsBulkDeleteModalOpen(false)}
+                    className="mt-3 w-full inline-flex justify-center rounded-xl border border-slate-300 shadow-sm px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none sm:mt-0 sm:w-auto"
                   >
                     Cancel
                   </button>

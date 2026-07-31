@@ -27,10 +27,19 @@ export default function NewUserForm() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  const [isExisting, setIsExisting] = useState(false);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!formData.email?.trim() && !formData.mobile?.trim()) {
+      setStatus('error');
+      setErrorMessage('Please provide at least one contact method (Email Address or Mobile Number).');
+      return;
+    }
+
     setStatus('submitting');
     setErrorMessage('');
+    setIsExisting(false);
 
     try {
       const res = await fetchApi('/users', {
@@ -40,6 +49,10 @@ export default function NewUserForm() {
 
       if (!res.success) {
         throw new Error(res.error?.message || 'Failed to create user');
+      }
+
+      if (res.data?.isExistingCustomer) {
+        setIsExisting(true);
       }
 
       setStatus('success');
@@ -63,9 +76,13 @@ export default function NewUserForm() {
           <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6">
             <CheckCircle2 className="w-10 h-10 text-emerald-600" />
           </div>
-          <h2 className="text-2xl font-bold text-slate-900 mb-4">User Created Successfully</h2>
+          <h2 className="text-2xl font-bold text-slate-900 mb-4">
+            {isExisting ? 'Remarks Added to Existing Customer' : 'User Created Successfully'}
+          </h2>
           <p className="text-slate-600 mb-8">
-            The new contact has been securely added to the CRM and assigned to you.
+            {isExisting 
+              ? 'An existing customer record matching this Email or Mobile was found. The details and remarks have been added to their profile timeline.'
+              : 'The new contact has been securely added to the CRM and assigned to you.'}
           </p>
           <div className="flex gap-4 justify-center">
             <Link 
@@ -75,10 +92,10 @@ export default function NewUserForm() {
               Back to Users
             </Link>
             <button 
-              onClick={() => setStatus('idle')}
+              onClick={() => { setStatus('idle'); setIsExisting(false); }}
               className="px-6 py-3 bg-indigo-600 text-white font-medium rounded-xl hover:bg-indigo-700 transition-colors shadow-sm"
             >
-              Add Another User
+              Add Another Contact
             </button>
           </div>
         </div>
