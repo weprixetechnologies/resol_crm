@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react';
 import { fetchApi } from '@/lib/api';
 import Link from 'next/link';
-import { Search, Plus, ChevronLeft, ChevronRight, Loader2, UserPlus, Eye, AlertTriangle, Filter, X } from 'lucide-react';
+import { Search, Plus, ChevronLeft, ChevronRight, Loader2, UserPlus, Eye, AlertTriangle, Filter, X, Download } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import Cookies from 'js-cookie';
 
 export default function UsersPage() {
   const { user } = useAuth();
@@ -20,8 +21,9 @@ export default function UsersPage() {
     is_deletion_requested: 'all', startDate: '', endDate: ''
   });
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
 
-  // Modal State for New User
+  // Modal State for New Customer Data
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newUserData, setNewUserData] = useState({ name: '', email: '', mobile: '', city: '' });
   const [createLoading, setCreateLoading] = useState(false);
@@ -30,7 +32,7 @@ export default function UsersPage() {
 
   const loadUsers = async () => {
     setLoading(true);
-    let url = `/users?page=${page}&limit=10&search=${search}`;
+    let url = `/users?page=${page}&limit=10&search=${encodeURIComponent(search)}`;
     
     // Append advanced filters
     Object.keys(advancedFilters).forEach(key => {
@@ -61,6 +63,40 @@ export default function UsersPage() {
     loadUsers();
   }, [page]);
 
+  const handleExportData = async () => {
+    setExporting(true);
+    try {
+      let url = `/users/export?search=${encodeURIComponent(search)}`;
+      Object.keys(advancedFilters).forEach(key => {
+        if (advancedFilters[key] && advancedFilters[key] !== 'all') {
+          url += `&${key}=${encodeURIComponent(advancedFilters[key])}`;
+        }
+      });
+      
+      const token = Cookies.get('token');
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const response = await fetch(`${apiUrl}${url}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (!response.ok) throw new Error('Export failed');
+      
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = `Customer_Data_Export_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (err) {
+      console.error(err);
+      alert('Export failed. Please try again.');
+    }
+    setExporting(false);
+  };
+
   const handleCreateUser = async (e, overrideFuzzy = false) => {
     if (e) e.preventDefault();
     setCreateLoading(true);
@@ -85,7 +121,7 @@ export default function UsersPage() {
         setFuzzyCandidates(res.error.candidates);
         setCreateError('Possible duplicate detected. Review candidates below.');
       } else {
-        setCreateError(res.error?.message || 'Failed to create user');
+        setCreateError(res.error?.message || 'Failed to create record');
       }
     }
   };
@@ -94,16 +130,26 @@ export default function UsersPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">CRM Users</h1>
-          <p className="text-sm text-slate-500 mt-1">Manage user contacts and track activity.</p>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Customer Data</h1>
+          <p className="text-sm text-slate-500 mt-1">Manage customer contacts and track activity.</p>
         </div>
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="inline-flex items-center px-4 py-2.5 bg-indigo-600 text-white font-medium text-sm rounded-xl hover:bg-indigo-700 shadow-sm transition-colors"
-        >
-          <UserPlus className="w-4 h-4 mr-2" />
-          New User
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleExportData}
+            disabled={exporting}
+            className="inline-flex items-center px-4 py-2.5 bg-emerald-600 text-white font-medium text-sm rounded-xl hover:bg-emerald-700 shadow-sm transition-colors disabled:opacity-70"
+          >
+            {exporting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
+            Export Data
+          </button>
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="inline-flex items-center px-4 py-2.5 bg-indigo-600 text-white font-medium text-sm rounded-xl hover:bg-indigo-700 shadow-sm transition-colors"
+          >
+            <UserPlus className="w-4 h-4 mr-2" />
+            New Customer
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
@@ -115,7 +161,7 @@ export default function UsersPage() {
               </div>
               <input
                 type="text"
-                placeholder="Search users by name, email, or mobile..."
+                placeholder="Search customer data by name, email, or mobile..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-xl leading-5 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent sm:text-sm transition-shadow"
@@ -265,13 +311,14 @@ export default function UsersPage() {
                   <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Contact</th>
                   <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Location</th>
                   <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Source</th>
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Staff Code</th>
                   <th scope="col" className="relative px-6 py-4"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-slate-100">
                 {users.length === 0 ? (
                   <tr>
-                    <td colSpan="5" className="px-6 py-12 text-center text-slate-500">No users found.</td>
+                    <td colSpan="6" className="px-6 py-12 text-center text-slate-500">No customer data found.</td>
                   </tr>
                 ) : (
                   users.map((u) => (
@@ -293,7 +340,7 @@ export default function UsersPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-slate-900">{u.email || '-'}</div>
-                        <div className="text-sm text-slate-500">{u.mobile || '-'}</div>
+                        <div className="text-sm text-slate-500">{u.country_code ? `${u.country_code} ` : ''}{u.mobile || '-'}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-slate-900">{u.city || '-'}</div>
@@ -304,6 +351,11 @@ export default function UsersPage() {
                             u.source === 'public_form' ? 'bg-emerald-100 text-emerald-800' : 
                             'bg-blue-100 text-blue-800'}`}>
                           {u.source.replace('_', ' ')}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-mono font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                          {u.created_by_code || u.staff_code || '-'}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -367,7 +419,7 @@ export default function UsersPage() {
         </div>
       </div>
 
-      {/* New User Modal */}
+      {/* New Customer Data Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
           <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
@@ -376,7 +428,7 @@ export default function UsersPage() {
             <div className="relative z-10 inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
               <form onSubmit={(e) => handleCreateUser(e, false)}>
                 <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                  <h3 className="text-xl font-semibold text-slate-900 mb-4" id="modal-title">Create New User</h3>
+                  <h3 className="text-xl font-semibold text-slate-900 mb-4" id="modal-title">Create New Customer Data</h3>
                   
                   {createError && (
                     <div className="mb-4 p-3 bg-rose-50 text-rose-600 text-sm rounded-xl border border-rose-100 flex items-start">
@@ -387,7 +439,7 @@ export default function UsersPage() {
 
                   {fuzzyCandidates && (
                     <div className="mb-4 p-3 bg-amber-50 rounded-xl border border-amber-200">
-                      <h4 className="text-sm font-medium text-amber-800 mb-2">Did you mean one of these users?</h4>
+                      <h4 className="text-sm font-medium text-amber-800 mb-2">Did you mean one of these records?</h4>
                       <ul className="space-y-2 mb-3">
                         {fuzzyCandidates.map(c => (
                           <li key={c.id} className="text-xs text-amber-900 bg-amber-100/50 p-2 rounded">
@@ -450,7 +502,7 @@ export default function UsersPage() {
                     disabled={createLoading}
                     className="w-full inline-flex justify-center rounded-xl border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-70"
                   >
-                    {createLoading ? 'Creating...' : 'Create User'}
+                    {createLoading ? 'Creating...' : 'Create Customer Data'}
                   </button>
                   <button
                     type="button"

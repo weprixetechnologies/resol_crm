@@ -159,8 +159,8 @@ export default function ImportPage() {
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Bulk Import Users</h1>
-        <p className="text-sm text-slate-500 mt-1">Upload an Excel (.xlsx) file to batch import CRM users.</p>
+        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Bulk Import Customer Data</h1>
+        <p className="text-sm text-slate-500 mt-1">Upload an Excel (.xlsx) file to batch import Customer Data into RESOL CRM.</p>
       </div>
 
       {error && (
@@ -193,6 +193,7 @@ export default function ImportPage() {
             <p className="pl-1">or drag and drop</p>
           </div>
           <p className="text-xs text-slate-500">Excel (.xlsx) up to 10MB</p>
+          <p className="text-xs text-indigo-600 font-medium">Supported Columns: Name, Email, Mobile, ISD Code (+91), City, State, Designation, Institute, Department, Region, Remark</p>
         </div>
 
         {file && (
@@ -254,6 +255,7 @@ export default function ImportPage() {
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Name</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Email</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">ISD Code</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Mobile</th>
                 </tr>
               </thead>
@@ -264,6 +266,7 @@ export default function ImportPage() {
                     <td className="px-6 py-4 whitespace-nowrap">{getStatusBadge(row.status)}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{row.name}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{row.email}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 font-mono">{row.country_code || '-'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{row.mobile}</td>
                   </tr>
                 ))}

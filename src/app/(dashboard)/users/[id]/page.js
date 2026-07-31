@@ -125,7 +125,7 @@ export default function UserDetailPage({ params }) {
           <ArrowLeft className="w-5 h-5 text-slate-600" />
         </button>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">User Profile</h1>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Customer Profile</h1>
           <p className="text-sm text-slate-500">ID: {user.id}</p>
         </div>
       </div>

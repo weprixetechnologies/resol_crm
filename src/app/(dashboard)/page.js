@@ -47,13 +47,13 @@ export default function DashboardPage() {
 
   const statCards = user?.role === 'admin' 
     ? [
-        { name: 'Total Users', value: stats?.totalUsers || 0, icon: Users, color: 'bg-blue-500' },
+        { name: 'Total Customer Data', value: stats?.totalUsers || 0, icon: Users, color: 'bg-blue-500' },
         { name: 'Staff Members', value: stats?.totalStaff || 0, icon: Shield, color: 'bg-indigo-500' },
         { name: 'Pending Deletions', value: stats?.pendingDeletions || 0, icon: UserX, color: 'bg-amber-500' },
-        { name: 'Archived Users', value: stats?.archivedUsers || 0, icon: Archive, color: 'bg-slate-500' },
+        { name: 'Archived Customer Data', value: stats?.archivedUsers || 0, icon: Archive, color: 'bg-slate-500' },
       ]
     : [
-        { name: 'Total CRM Contacts', value: stats?.totalUsers || 0, icon: Database, color: 'bg-blue-500' },
+        { name: 'Total Customer Data', value: stats?.totalUsers || 0, icon: Database, color: 'bg-blue-500' },
         { name: 'My Contacts', value: stats?.myTotalUsers || 0, icon: Users, color: 'bg-indigo-500' },
         { name: 'Added Today', value: stats?.myTodayUsers || 0, icon: UserPlus, color: 'bg-emerald-500' },
       ];
@@ -76,7 +76,7 @@ export default function DashboardPage() {
     <div className="space-y-6 pb-12">
       <div>
         <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Dashboard Overview</h1>
-        <p className="text-sm text-slate-500 mt-1">High-level metrics for Vishalji CRM</p>
+        <p className="text-sm text-slate-500 mt-1">High-level metrics for RESOL CRM</p>
       </div>
 
       {/* Top Stat Cards */}
@@ -195,8 +195,8 @@ export default function DashboardPage() {
                     <Users className="w-5 h-5" />
                   </div>
                   <div>
-                    <h4 className="font-semibold text-slate-900 text-sm">Manage Users</h4>
-                    <p className="text-xs text-slate-500">View and edit CRM contacts</p>
+                    <h4 className="font-semibold text-slate-900 text-sm">Manage Customer Data</h4>
+                    <p className="text-xs text-slate-500">View and manage Customer Data</p>
                   </div>
                 </Link>
                 
@@ -206,7 +206,7 @@ export default function DashboardPage() {
                   </div>
                   <div>
                     <h4 className="font-semibold text-slate-900 text-sm">Bulk Import</h4>
-                    <p className="text-xs text-slate-500">Upload users via Excel file</p>
+                    <p className="text-xs text-slate-500">Upload Customer Data via Excel file</p>
                   </div>
                 </Link>
               </div>

@@ -174,7 +174,7 @@ export default function SettingsPage() {
                   <span className="ml-3 text-sm text-slate-900 font-medium">Restricted Access (Self Only)</span>
                 </label>
                 <p className="text-xs text-slate-500 mt-2">
-                  Determines whether staff can view all CRM users or only the ones they created manually.
+                  Determines whether staff can view all Customer Data or only the records they created manually.
                 </p>
               </div>
             </div>

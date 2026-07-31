@@ -28,7 +28,7 @@ export default function DashboardLayout({ children }) {
 
   const navigation = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard, exact: true },
-    { name: 'Users', href: '/users', icon: Users, exact: false },
+    { name: 'Customer Data', href: '/users', icon: Users, exact: false },
     { name: 'Import Data', href: '/import', icon: Upload, exact: false },
   ];
 
@@ -84,9 +84,9 @@ export default function DashboardLayout({ children }) {
           {/* Logo area */}
           <div className={`h-16 flex items-center border-b border-slate-100 ${isCollapsed ? 'justify-center px-2' : 'px-6'}`}>
             <div className={`w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center ${isCollapsed ? '' : 'mr-3'}`}>
-              <span className="text-white font-bold text-lg">V</span>
+              <span className="text-white font-bold text-lg">R</span>
             </div>
-            {!isCollapsed && <span className="text-xl font-semibold text-slate-900 truncate">Vishalji CRM</span>}
+            {!isCollapsed && <span className="text-xl font-semibold text-slate-900 truncate">RESOL CRM</span>}
             <button 
               className="ml-auto lg:hidden text-slate-500 hover:text-slate-900"
               onClick={() => setIsMobileMenuOpen(false)}
@@ -180,7 +180,7 @@ export default function DashboardLayout({ children }) {
           >
             <Menu className="w-6 h-6" />
           </button>
-          <span className="ml-3 text-lg font-semibold text-slate-900">Vishalji CRM</span>
+          <span className="ml-3 text-lg font-semibold text-slate-900">RESOL CRM</span>
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 md:p-8">
