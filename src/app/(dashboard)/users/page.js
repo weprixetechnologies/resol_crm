@@ -16,8 +16,8 @@ export default function UsersPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [advancedFilters, setAdvancedFilters] = useState({
     city: '', state: '', institute: '', department: '', designation: '', 
-    source: 'all', region_type: 'all', is_admin_verified: 'all', 
-    is_deletion_requested: 'all', startDate: '', endDate: ''
+    source: 'all', region_type: 'all', status: 'all', tag1: '', tag2: '',
+    is_admin_verified: 'all', is_deletion_requested: 'all', startDate: '', endDate: ''
   });
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
@@ -31,7 +31,7 @@ export default function UsersPage() {
 
   // Modal State for New Customer Data
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newUserData, setNewUserData] = useState({ name: '', email: '', mobile: '', city: '' });
+  const [newUserData, setNewUserData] = useState({ name: '', email: '', mobile: '', city: '', status: 'active', tag1: '', tag2: '' });
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState('');
   const [fuzzyCandidates, setFuzzyCandidates] = useState(null);
@@ -112,7 +112,7 @@ export default function UsersPage() {
 
     if (res.success) {
       setIsModalOpen(false);
-      setNewUserData({ name: '', email: '', mobile: '', city: '' });
+      setNewUserData({ name: '', email: '', mobile: '', city: '', status: 'active', tag1: '', tag2: '' });
       setFuzzyCandidates(null);
       loadUsers();
     } else {
@@ -122,6 +122,18 @@ export default function UsersPage() {
       } else {
         setCreateError(res.error?.message || 'Failed to create record');
       }
+    }
+  };
+
+  const handleStatusChange = async (userId, newStatus) => {
+    const res = await fetchApi(`/users/${userId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: newStatus })
+    });
+    if (res.success) {
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: newStatus } : u));
+    } else {
+      alert(res.error?.message || 'Failed to update status');
     }
   };
 
@@ -267,8 +279,8 @@ export default function UsersPage() {
               <button 
                 onClick={() => setAdvancedFilters({
                   city: '', state: '', institute: '', department: '', designation: '', 
-                  source: 'all', region_type: 'all', is_admin_verified: 'all', 
-                  is_deletion_requested: 'all', startDate: '', endDate: ''
+                  source: 'all', region_type: 'all', status: 'all', tag1: '', tag2: '',
+                  is_admin_verified: 'all', is_deletion_requested: 'all', startDate: '', endDate: ''
                 })}
                 className="text-xs text-indigo-600 hover:text-indigo-800 font-medium flex items-center"
               >
@@ -277,6 +289,43 @@ export default function UsersPage() {
             </div>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {/* Status Select Filter */}
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Status</label>
+                <select
+                  value={advancedFilters.status}
+                  onChange={e => setAdvancedFilters({...advancedFilters, status: e.target.value})}
+                  className="block w-full border border-slate-300 rounded-lg shadow-sm py-1.5 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm font-medium"
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="active">Active</option>
+                  <option value="unverified">Unverified</option>
+                </select>
+              </div>
+
+              {/* Tag 1 & Tag 2 Filters */}
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Tag 1</label>
+                <input
+                  type="text"
+                  value={advancedFilters.tag1}
+                  onChange={e => setAdvancedFilters({...advancedFilters, tag1: e.target.value})}
+                  className="block w-full border border-slate-300 rounded-lg shadow-sm py-1.5 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  placeholder="Filter by Tag 1"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Tag 2</label>
+                <input
+                  type="text"
+                  value={advancedFilters.tag2}
+                  onChange={e => setAdvancedFilters({...advancedFilters, tag2: e.target.value})}
+                  className="block w-full border border-slate-300 rounded-lg shadow-sm py-1.5 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  placeholder="Filter by Tag 2"
+                />
+              </div>
+
               {/* Text Inputs */}
               {[
                 { key: 'city', label: 'City' },
@@ -393,6 +442,9 @@ export default function UsersPage() {
                     />
                   </th>
                   <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Name</th>
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Tag 1</th>
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Tag 2</th>
                   <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Contact</th>
                   <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Location</th>
                   <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Source</th>
@@ -403,7 +455,7 @@ export default function UsersPage() {
               <tbody className="bg-white divide-y divide-slate-100">
                 {users.length === 0 ? (
                   <tr>
-                    <td colSpan="7" className="px-6 py-12 text-center text-slate-500">No customer data found.</td>
+                    <td colSpan="10" className="px-6 py-12 text-center text-slate-500">No customer data found.</td>
                   </tr>
                 ) : (
                   users.map((u) => (
@@ -431,6 +483,38 @@ export default function UsersPage() {
                             )}
                           </div>
                         </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <select
+                          value={u.status || 'active'}
+                          onChange={(e) => handleStatusChange(u.id, e.target.value)}
+                          className={`text-xs font-semibold rounded-full px-2.5 py-1 border cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${
+                            (u.status || 'active') === 'unverified'
+                              ? 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
+                              : 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                          }`}
+                        >
+                          <option value="active">active</option>
+                          <option value="unverified">unverified</option>
+                        </select>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {u.tag1 ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
+                            {u.tag1}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 text-xs">-</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {u.tag2 ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-purple-50 text-purple-700 border border-purple-100">
+                            {u.tag2}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 text-xs">-</span>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-slate-900">{u.email || '-'}</div>
@@ -585,6 +669,37 @@ export default function UsersPage() {
                         type="text"
                         value={newUserData.city}
                         onChange={e => setNewUserData({...newUserData, city: e.target.value})}
+                        className="mt-1 block w-full border border-slate-300 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700">Status</label>
+                      <select
+                        value={newUserData.status}
+                        onChange={e => setNewUserData({...newUserData, status: e.target.value})}
+                        className="mt-1 block w-full border border-slate-300 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm font-medium"
+                      >
+                        <option value="active">Active</option>
+                        <option value="unverified">Unverified</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700">Tag 1</label>
+                      <input
+                        type="text"
+                        value={newUserData.tag1}
+                        onChange={e => setNewUserData({...newUserData, tag1: e.target.value})}
+                        placeholder="Enter Tag 1 text"
+                        className="mt-1 block w-full border border-slate-300 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700">Tag 2</label>
+                      <input
+                        type="text"
+                        value={newUserData.tag2}
+                        onChange={e => setNewUserData({...newUserData, tag2: e.target.value})}
+                        placeholder="Enter Tag 2 text"
                         className="mt-1 block w-full border border-slate-300 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                       />
                     </div>

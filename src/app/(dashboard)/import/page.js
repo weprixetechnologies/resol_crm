@@ -193,7 +193,7 @@ export default function ImportPage() {
             <p className="pl-1">or drag and drop</p>
           </div>
           <p className="text-xs text-slate-500">Excel (.xlsx) up to 10MB</p>
-          <p className="text-xs text-indigo-600 font-medium">Supported Columns: Name, Email, Mobile, ISD Code (+91), City, State, Designation, Institute, Department, Region, Remark</p>
+          <p className="text-xs text-indigo-600 font-medium">Supported Columns: Name, Email, Mobile, ISD Code (+91), City, State, Designation, Institute, Department, Region, Status, Tag 1, Tag 2, Remark</p>
         </div>
 
         {file && (
@@ -252,7 +252,10 @@ export default function ImportPage() {
               <thead className="bg-slate-50 sticky top-0 z-10">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Row</th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Validity</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">User Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Tag 1</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Tag 2</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Name</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Email</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">ISD Code</th>
@@ -264,6 +267,15 @@ export default function ImportPage() {
                   <tr key={idx} className={row.status === 'INVALID' ? 'bg-slate-50/50' : 'hover:bg-slate-50'}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{row.rowNumber}</td>
                     <td className="px-6 py-4 whitespace-nowrap">{getStatusBadge(row.status)}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold capitalize ${
+                        row.user_status === 'unverified' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                      }`}>
+                        {row.user_status || 'active'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{row.tag1 || '-'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">{row.tag2 || '-'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">{row.name}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{row.email}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 font-mono">{row.country_code || '-'}</td>

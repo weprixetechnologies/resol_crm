@@ -265,6 +265,40 @@ export default function UserDetailPage({ params }) {
                   )}
                 </div>
 
+                <div>
+                  <label className="block text-sm font-medium text-slate-500 mb-1">Status</label>
+                  {isEditing ? (
+                    <select value={editData.status || 'active'} onChange={e => setEditData({...editData, status: e.target.value})} className="w-full border border-slate-300 rounded-lg p-2 focus:ring-indigo-500 focus:border-indigo-500 font-medium">
+                      <option value="active">Active</option>
+                      <option value="unverified">Unverified</option>
+                    </select>
+                  ) : (
+                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold capitalize ${
+                      (user.status || 'active') === 'unverified' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                    }`}>
+                      {user.status || 'active'}
+                    </span>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-500 mb-1">Tag 1</label>
+                  {isEditing ? (
+                    <input type="text" placeholder="Enter Tag 1" value={editData.tag1 || ''} onChange={e => setEditData({...editData, tag1: e.target.value})} className="w-full border border-slate-300 rounded-lg p-2 focus:ring-indigo-500 focus:border-indigo-500" />
+                  ) : (
+                    <div className="text-slate-900 font-medium">{user.tag1 || 'N/A'}</div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-500 mb-1">Tag 2</label>
+                  {isEditing ? (
+                    <input type="text" placeholder="Enter Tag 2" value={editData.tag2 || ''} onChange={e => setEditData({...editData, tag2: e.target.value})} className="w-full border border-slate-300 rounded-lg p-2 focus:ring-indigo-500 focus:border-indigo-500" />
+                  ) : (
+                    <div className="text-slate-900 font-medium">{user.tag2 || 'N/A'}</div>
+                  )}
+                </div>
+
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-slate-500 mb-1">Remarks</label>
                   {isEditing ? (

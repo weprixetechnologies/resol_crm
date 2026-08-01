@@ -17,6 +17,9 @@ export default function NewUserForm() {
     department: '',
     region_type: 'indian',
     country_code: '',
+    status: 'active',
+    tag1: '',
+    tag2: '',
     remarks: ''
   });
 
@@ -60,7 +63,8 @@ export default function NewUserForm() {
       setFormData({
         name: '', email: '', mobile: '', city: '', state: '', 
         designation: '', institute: '', department: '', 
-        region_type: 'indian', country_code: '', remarks: ''
+        region_type: 'indian', country_code: '', status: 'active',
+        tag1: '', tag2: '', remarks: ''
       });
     } catch (err) {
       console.error(err);
@@ -275,8 +279,45 @@ export default function NewUserForm() {
           <div>
             <h3 className="text-lg font-bold text-slate-900 border-b border-slate-100 pb-3 mb-5 flex items-center">
               <ShieldAlert className="w-5 h-5 mr-3 text-indigo-500" />
-              Administrative
+              Administrative & Tags
             </h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Status</label>
+                <div className="relative">
+                  <select
+                    name="status"
+                    value={formData.status} onChange={handleChange}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all appearance-none font-medium"
+                  >
+                    <option value="active">Active</option>
+                    <option value="unverified">Unverified</option>
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Tag 1</label>
+                <input
+                  type="text" name="tag1"
+                  value={formData.tag1} onChange={handleChange}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
+                  placeholder="Enter Tag 1"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Tag 2</label>
+                <input
+                  type="text" name="tag2"
+                  value={formData.tag2} onChange={handleChange}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
+                  placeholder="Enter Tag 2"
+                />
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 gap-6">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Remarks / Notes</label>
