@@ -7,7 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import { 
   LayoutDashboard, Users, UserPlus, Settings, 
   Database, Shield, LogOut, Menu, X, Clock, Upload,
-  ChevronLeft, ChevronRight, ShieldAlert
+  ChevronLeft, ChevronRight, ShieldAlert, Mail, FileText, Send, History
 } from 'lucide-react';
 
 export default function DashboardLayout({ children }) {
@@ -30,6 +30,12 @@ export default function DashboardLayout({ children }) {
     { name: 'Dashboard', href: '/', icon: LayoutDashboard, exact: true },
     { name: 'Customer Data', href: '/users', icon: Users, exact: false },
     { name: 'Import Data', href: '/import', icon: Upload, exact: false },
+  ];
+
+  const mailNavigation = [
+    { name: 'Compose Mail', href: '/email/compose', icon: Send, exact: false },
+    { name: 'Email Templates', href: '/email/templates', icon: FileText, exact: false },
+    { name: 'Email Logs', href: '/email/logs', icon: History, exact: false },
   ];
 
   const adminNavigation = [
@@ -101,6 +107,23 @@ export default function DashboardLayout({ children }) {
               {navigation.map((item) => (
                 <NavItem key={item.name} item={item} />
               ))}
+            </div>
+
+            <div>
+              {!isCollapsed ? (
+                <h3 className="px-3 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                  Mailing System
+                </h3>
+              ) : (
+                <div className="flex justify-center mb-2">
+                  <div className="w-4 h-px bg-slate-300"></div>
+                </div>
+              )}
+              <div className="space-y-1">
+                {mailNavigation.map((item) => (
+                  <NavItem key={item.name} item={item} />
+                ))}
+              </div>
             </div>
 
             {isAdmin && (

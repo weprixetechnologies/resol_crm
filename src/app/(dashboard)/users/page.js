@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { fetchApi, api } from '@/lib/api';
 import Link from 'next/link';
-import { Search, Plus, ChevronLeft, ChevronRight, Loader2, UserPlus, Eye, AlertTriangle, Filter, X, Download, Trash2 } from 'lucide-react';
+import { Search, Plus, ChevronLeft, ChevronRight, Loader2, UserPlus, Eye, AlertTriangle, Filter, X, Download, Trash2, Mail } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 export default function UsersPage() {
@@ -16,7 +16,7 @@ export default function UsersPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [advancedFilters, setAdvancedFilters] = useState({
     city: '', state: '', institute: '', department: '', designation: '', 
-    source: 'all', region_type: 'all', status: 'all', tag1: '', tag2: '',
+    source: 'all', region_type: 'all', status: 'all', tag1: '', tag2: '', staff_code: '',
     is_admin_verified: 'all', is_deletion_requested: 'all', startDate: '', endDate: ''
   });
   const [loading, setLoading] = useState(true);
@@ -219,6 +219,13 @@ export default function UsersPage() {
             </span>
           </div>
           <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+            <Link
+              href={`/email/compose?users=${selectedUserIds.join(',')}`}
+              className="inline-flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs tracking-wide rounded-xl shadow-md transition-all transform active:scale-95 uppercase"
+            >
+              <Mail className="w-4 h-4 mr-1.5" />
+              COMPOSE MAIL
+            </Link>
             <button
               onClick={() => setSelectedUserIds([])}
               className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 rounded-xl shadow-xs transition-colors"
@@ -279,7 +286,7 @@ export default function UsersPage() {
               <button 
                 onClick={() => setAdvancedFilters({
                   city: '', state: '', institute: '', department: '', designation: '', 
-                  source: 'all', region_type: 'all', status: 'all', tag1: '', tag2: '',
+                  source: 'all', region_type: 'all', status: 'all', tag1: '', tag2: '', staff_code: '',
                   is_admin_verified: 'all', is_deletion_requested: 'all', startDate: '', endDate: ''
                 })}
                 className="text-xs text-indigo-600 hover:text-indigo-800 font-medium flex items-center"
@@ -323,6 +330,17 @@ export default function UsersPage() {
                   onChange={e => setAdvancedFilters({...advancedFilters, tag2: e.target.value})}
                   className="block w-full border border-slate-300 rounded-lg shadow-sm py-1.5 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   placeholder="Filter by Tag 2"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Staff Code</label>
+                <input
+                  type="text"
+                  value={advancedFilters.staff_code}
+                  onChange={e => setAdvancedFilters({...advancedFilters, staff_code: e.target.value})}
+                  className="block w-full border border-slate-300 rounded-lg shadow-sm py-1.5 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm font-mono"
+                  placeholder="e.g. ST01"
                 />
               </div>
 
@@ -537,9 +555,14 @@ export default function UsersPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <Link href={`/users/${u.id}`} className="text-indigo-600 hover:text-indigo-900 inline-flex items-center">
-                          <Eye className="w-4 h-4 mr-1" /> View
-                        </Link>
+                        <div className="flex items-center justify-end space-x-3">
+                          <Link href={`/email/compose?userId=${u.id}`} title="Send Email" className="text-slate-400 hover:text-indigo-600 transition-colors inline-flex items-center p-1 rounded-lg hover:bg-slate-100">
+                            <Mail className="w-4 h-4" />
+                          </Link>
+                          <Link href={`/users/${u.id}`} className="text-indigo-600 hover:text-indigo-900 inline-flex items-center">
+                            <Eye className="w-4 h-4 mr-1" /> View
+                          </Link>
+                        </div>
                       </td>
                     </tr>
                   ))
