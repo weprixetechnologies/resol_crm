@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { fetchApi, api } from '@/lib/api';
 import Link from 'next/link';
-import { Search, Plus, ChevronLeft, ChevronRight, Loader2, UserPlus, Eye, AlertTriangle, Filter, X, Download, Trash2, Mail } from 'lucide-react';
+import { Search, Plus, ChevronLeft, ChevronRight, Loader2, UserPlus, Eye, AlertTriangle, Filter, X, Download, Trash2, Mail, Calendar } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 export default function UsersPage() {
@@ -21,6 +21,39 @@ export default function UsersPage() {
   });
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+
+  const applyDatePreset = (preset) => {
+    const today = new Date();
+    const formatDate = (d) => {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+    
+    if (preset === 'today') {
+      const dateStr = formatDate(today);
+      setAdvancedFilters(prev => ({ ...prev, startDate: dateStr, endDate: dateStr }));
+    } else if (preset === 'yesterday') {
+      const y = new Date(today);
+      y.setDate(y.getDate() - 1);
+      const dateStr = formatDate(y);
+      setAdvancedFilters(prev => ({ ...prev, startDate: dateStr, endDate: dateStr }));
+    } else if (preset === '7d') {
+      const d7 = new Date(today);
+      d7.setDate(d7.getDate() - 6);
+      setAdvancedFilters(prev => ({ ...prev, startDate: formatDate(d7), endDate: formatDate(today) }));
+    } else if (preset === '30d') {
+      const d30 = new Date(today);
+      d30.setDate(d30.getDate() - 29);
+      setAdvancedFilters(prev => ({ ...prev, startDate: formatDate(d30), endDate: formatDate(today) }));
+    } else if (preset === 'this_month') {
+      const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+      setAdvancedFilters(prev => ({ ...prev, startDate: formatDate(startOfMonth), endDate: formatDate(today) }));
+    } else if (preset === 'clear') {
+      setAdvancedFilters(prev => ({ ...prev, startDate: '', endDate: '' }));
+    }
+  };
 
   // Selection & Bulk Deletion State
   const [selectedUserIds, setSelectedUserIds] = useState([]);
@@ -437,7 +470,79 @@ export default function UsersPage() {
                   className="block w-full border border-slate-300 rounded-lg shadow-sm py-1.5 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-slate-600"
                 />
               </div>
+
+              {/* Quick Date Presets Bar */}
+              <div className="col-span-full border-t border-slate-100 pt-3 mt-1">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center text-xs font-semibold text-slate-700">
+                    <Calendar className="w-4 h-4 mr-1.5 text-indigo-500" />
+                    Quick Date Range Presets:
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => applyDatePreset('today')}
+                      className={`px-2.5 py-1 text-xs font-medium rounded-lg transition-colors ${advancedFilters.startDate && advancedFilters.startDate === advancedFilters.endDate && advancedFilters.startDate === new Date().toISOString().slice(0, 10) ? 'bg-indigo-600 text-white font-bold' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}`}
+                    >
+                      Today
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyDatePreset('yesterday')}
+                      className="px-2.5 py-1 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors"
+                    >
+                      Yesterday
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyDatePreset('7d')}
+                      className="px-2.5 py-1 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors"
+                    >
+                      Last 7 Days
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyDatePreset('30d')}
+                      className="px-2.5 py-1 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors"
+                    >
+                      Last 30 Days
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyDatePreset('this_month')}
+                      className="px-2.5 py-1 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors"
+                    >
+                      This Month
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyDatePreset('clear')}
+                      className="px-2.5 py-1 text-xs font-medium bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition-colors"
+                    >
+                      Clear Dates
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
+          </div>
+        )}
+
+        {/* Active Date Range Banner */}
+        {(advancedFilters.startDate || advancedFilters.endDate) && (
+          <div className="px-4 py-2.5 bg-indigo-50/80 border-b border-indigo-100 flex items-center justify-between text-xs font-medium text-indigo-900">
+            <div className="flex items-center space-x-2">
+              <Calendar className="w-4 h-4 text-indigo-600 flex-shrink-0" />
+              <span>
+                Filtered by Date Range: <strong className="font-bold text-indigo-950">{advancedFilters.startDate || 'Beginning'}</strong> to <strong className="font-bold text-indigo-950">{advancedFilters.endDate || 'Today'}</strong>
+              </span>
+            </div>
+            <button
+              onClick={() => applyDatePreset('clear')}
+              className="text-xs text-indigo-700 hover:text-indigo-900 font-bold underline ml-3 flex-shrink-0"
+            >
+              Clear Date Filter
+            </button>
           </div>
         )}
 
