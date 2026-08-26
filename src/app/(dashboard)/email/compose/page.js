@@ -273,7 +273,7 @@ function ComposeMailContent() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Compose & Send Email</h1>
-          <p className="text-sm text-slate-500 mt-1">Send non-blocking bulk or individual emails to customers via BullMQ & Nodemailer.</p>
+          <p className="text-sm text-slate-500 mt-1">Send non-blocking bulk or individual emails to customers via BullMQ & GMass.</p>
         </div>
         <div className="flex items-center gap-3">
           <button
