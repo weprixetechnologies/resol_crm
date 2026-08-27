@@ -244,15 +244,17 @@ export default function UserDetailPage({ params }) {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-500 mb-1">Region</label>
+                  <label className="block text-sm font-medium text-slate-500 mb-1">Country</label>
                   {isEditing ? (
-                    <select value={editData.region_type || ''} onChange={e => setEditData({...editData, region_type: e.target.value})} className="w-full border border-slate-300 rounded-lg p-2 focus:ring-indigo-500 focus:border-indigo-500">
-                      <option value="">Select Region</option>
-                      <option value="indian">Indian</option>
-                      <option value="abroad">Abroad</option>
-                    </select>
+                    <input 
+                      type="text" 
+                      placeholder="e.g. India, USA" 
+                      value={editData.country !== undefined ? editData.country : (editData.region_type || '')} 
+                      onChange={e => setEditData({...editData, country: e.target.value, region_type: e.target.value})} 
+                      className="w-full border border-slate-300 rounded-lg p-2 focus:ring-indigo-500 focus:border-indigo-500" 
+                    />
                   ) : (
-                    <div className="text-slate-900 font-medium capitalize">{user.region_type || 'N/A'}</div>
+                    <div className="text-slate-900 font-medium">{user.country || user.region_type || 'N/A'}</div>
                   )}
                 </div>
 

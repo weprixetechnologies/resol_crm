@@ -4,39 +4,32 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { fetchApi } from '@/lib/api';
 import { 
-  Zap, RefreshCw, Send, Eye, MousePointer, MessageSquare, 
-  AlertTriangle, Shield, CheckCircle2, Loader2, ArrowUpRight, 
-  UserCheck, Flame, MessageCircle, MailX, UserX, Copy, Check, Filter
+  Zap, Send, Eye, MousePointer, MessageSquare, 
+  Loader2, UserCheck, Flame, MessageCircle, MailX, UserX, Filter
 } from 'lucide-react';
 
-export default function GMassTrackingDashboard() {
+export default function EmailTrackingDashboard() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState(null);
 
   // Data states
   const [summary, setSummary] = useState(null);
   const [campaigns, setCampaigns] = useState([]);
-  const [settings, setSettings] = useState(null);
 
   // UI state
-  const [activeTab, setActiveTab] = useState('campaigns'); // 'campaigns' | 'events' | 'webhook-guide'
+  const [activeTab, setActiveTab] = useState('campaigns'); // 'campaigns' | 'events'
   const [eventSearch, setEventSearch] = useState('');
   const [eventTypeFilter, setEventTypeFilter] = useState('all');
-  const [copiedUrl, setCopiedUrl] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
-    const [sumRes, campRes, setRes] = await Promise.all([
+    const [sumRes, campRes] = await Promise.all([
       fetchApi('/campaigns/tracking/summary'),
-      fetchApi('/campaigns?limit=50'),
-      fetchApi('/settings')
+      fetchApi('/campaigns?limit=50')
     ]);
 
     if (sumRes.success) setSummary(sumRes.data);
     if (campRes.success) setCampaigns(campRes.data.items || []);
-    if (setRes.success) setSettings(setRes.data || {});
 
     setLoading(false);
   };
@@ -44,42 +37,6 @@ export default function GMassTrackingDashboard() {
   useEffect(() => {
     loadData();
   }, []);
-
-  const handleSyncAll = async () => {
-    setSyncing(true);
-    setSyncResult(null);
-
-    const res = await fetchApi('/campaigns/sync-all', { method: 'POST' });
-    setSyncing(false);
-
-    if (res.success) {
-      setSyncResult({ success: true, message: 'GMass API stats successfully synchronized!' });
-      loadData();
-      setTimeout(() => setSyncResult(null), 4000);
-    } else {
-      setSyncResult({ success: false, message: res.error?.message || 'Sync failed' });
-    }
-  };
-
-  const handleSyncCampaign = async (campaignId) => {
-    const res = await fetchApi(`/campaigns/${campaignId}/sync`, { method: 'POST' });
-    if (res.success) {
-      alert(`Campaign #${campaignId} synced! Reconciled ${res.data.reconciledEventsCount} events.`);
-      loadData();
-    } else {
-      alert(res.error?.message || 'Campaign sync failed');
-    }
-  };
-
-  const copyWebhookUrl = () => {
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const secret = settings?.gmass_webhook_secret ? `?secret=${settings.gmass_webhook_secret}` : '';
-    const fullUrl = `${origin.replace('3000', '9822')}/api/webhooks/gmass${secret}`;
-    
-    navigator.clipboard.writeText(fullUrl);
-    setCopiedUrl(true);
-    setTimeout(() => setCopiedUrl(false), 2500);
-  };
 
   if (loading) {
     return (
@@ -125,21 +82,12 @@ export default function GMassTrackingDashboard() {
             <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center">
               <Zap className="w-5 h-5" />
             </div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">GMass Tracking & Analytics</h1>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Email Tracking & Analytics</h1>
           </div>
-          <p className="text-sm text-slate-500 mt-1">Real-time email engagement metrics, GMass Webhook logs, and API pulling sync.</p>
+          <p className="text-sm text-slate-500 mt-1">Real-time email engagement metrics, delivery statuses, and campaign analytics.</p>
         </div>
 
         <div className="flex items-center gap-3">
-          <button
-            onClick={handleSyncAll}
-            disabled={syncing}
-            className="inline-flex items-center px-4 py-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold text-sm rounded-xl shadow-xs transition-colors disabled:opacity-50"
-          >
-            <RefreshCw className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin text-indigo-600' : 'text-slate-500'}`} />
-            {syncing ? 'Syncing GMass API...' : 'Sync GMass API Stats Now'}
-          </button>
-          
           <button
             onClick={() => router.push('/email/compose')}
             className="inline-flex items-center px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl shadow-sm transition-colors"
@@ -148,17 +96,6 @@ export default function GMassTrackingDashboard() {
           </button>
         </div>
       </div>
-
-      {syncResult && (
-        <div className={`p-4 rounded-xl border flex items-center justify-between text-sm ${
-          syncResult.success ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-rose-50 text-rose-800 border-rose-200'
-        }`}>
-          <div className="flex items-center space-x-2">
-            <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-            <span>{syncResult.message}</span>
-          </div>
-        </div>
-      )}
 
       {/* KPI Stats Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -225,11 +162,11 @@ export default function GMassTrackingDashboard() {
         </div>
       </div>
 
-      {/* Lead Conversion Automation Summary */}
+      {/* Lead Conversion Summary */}
       <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
         <h3 className="text-sm font-bold text-slate-900 mb-3 flex items-center">
           <UserCheck className="w-4 h-4 mr-2 text-indigo-600" />
-          Automated CRM Lead Status Conversions
+          CRM Lead Status Conversions
         </h3>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           <div className="bg-emerald-50/60 p-3 rounded-xl border border-emerald-100">
@@ -303,15 +240,6 @@ export default function GMassTrackingDashboard() {
         >
           Live Event Feed ({recentEvents.length})
         </button>
-
-        <button
-          onClick={() => setActiveTab('webhook-guide')}
-          className={`pb-3 text-sm font-semibold transition-colors border-b-2 flex items-center ${
-            activeTab === 'webhook-guide' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          <Shield className="w-4 h-4 mr-1.5" /> GMass Webhook Setup Guide
-        </button>
       </div>
 
       {/* Tab 1: Campaigns Performance Table */}
@@ -322,20 +250,19 @@ export default function GMassTrackingDashboard() {
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500">
                   <th className="py-3.5 px-4">Campaign Name & Subject</th>
-                  <th className="py-3.5 px-4">GMass ID</th>
+                  <th className="py-3.5 px-4">Campaign ID</th>
                   <th className="py-3.5 px-4 text-center">Recipients</th>
                   <th className="py-3.5 px-4 text-center">Opens</th>
                   <th className="py-3.5 px-4 text-center">Clicks</th>
                   <th className="py-3.5 px-4 text-center">Replies</th>
                   <th className="py-3.5 px-4 text-center">Status</th>
-                  <th className="py-3.5 px-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs">
                 {campaigns.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="text-center py-12 text-slate-400">
-                      No campaigns found. Compose an email campaign to track GMass stats.
+                    <td colSpan={7} className="text-center py-12 text-slate-400">
+                      No campaigns found. Compose an email campaign to track stats.
                     </td>
                   </tr>
                 ) : (
@@ -346,7 +273,7 @@ export default function GMassTrackingDashboard() {
                         <div className="text-slate-500 font-mono text-[11px] truncate max-w-xs">{camp.subject}</div>
                       </td>
                       <td className="py-3.5 px-4 font-mono text-[11px] text-indigo-600">
-                        {camp.gmass_campaign_id || <span className="text-slate-400 italic">Draft / Pending</span>}
+                        #{camp.id}
                       </td>
                       <td className="py-3.5 px-4 text-center font-semibold text-slate-800">
                         {camp.recipient_count || 0}
@@ -373,18 +300,6 @@ export default function GMassTrackingDashboard() {
                         }`}>
                           {camp.status}
                         </span>
-                      </td>
-                      <td className="py-3.5 px-4 text-right">
-                        {camp.gmass_campaign_id ? (
-                          <button
-                            onClick={() => handleSyncCampaign(camp.id)}
-                            className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs rounded-lg transition-colors inline-flex items-center"
-                          >
-                            <RefreshCw className="w-3 h-3 mr-1" /> Sync GMass
-                          </button>
-                        ) : (
-                          <span className="text-slate-400 text-[11px] italic">No GMass ID</span>
-                        )}
                       </td>
                     </tr>
                   ))
@@ -417,6 +332,7 @@ export default function GMassTrackingDashboard() {
                 className="border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-medium bg-white text-slate-700"
               >
                 <option value="all">All Event Types</option>
+                <option value="send">Send</option>
                 <option value="open">Open</option>
                 <option value="click">Click</option>
                 <option value="reply">Reply</option>
@@ -442,7 +358,7 @@ export default function GMassTrackingDashboard() {
                 {filteredEvents.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="text-center py-12 text-slate-400">
-                      No webhook/polling events recorded yet.
+                      No delivery/tracking events recorded yet.
                     </td>
                   </tr>
                 ) : (
@@ -456,6 +372,7 @@ export default function GMassTrackingDashboard() {
                           ev.event_type === 'Open' ? 'bg-emerald-100 text-emerald-800' :
                           ev.event_type === 'Click' ? 'bg-amber-100 text-amber-800' :
                           ev.event_type === 'Reply' ? 'bg-purple-100 text-purple-800' :
+                          ev.event_type === 'Send' ? 'bg-blue-100 text-blue-800' :
                           ev.event_type === 'Bounce' ? 'bg-rose-100 text-rose-800' : 'bg-slate-200 text-slate-700'
                         }`}>
                           {ev.event_type}
@@ -481,62 +398,6 @@ export default function GMassTrackingDashboard() {
                 )}
               </tbody>
             </table>
-          </div>
-        </div>
-      )}
-
-      {/* Tab 3: GMass Webhook Setup Guide */}
-      {activeTab === 'webhook-guide' && (
-        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-6">
-          <div className="flex items-start space-x-4">
-            <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center flex-shrink-0">
-              <Shield className="w-6 h-6" />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-slate-900">GMass Webhook Receiver Endpoint</h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Configure GMass Dashboard to push live events (Opens, Clicks, Replies, Bounces) directly into RESOL CRM.
-              </p>
-            </div>
-          </div>
-
-          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-              Your Public GMass Webhook Receiver URL:
-            </label>
-            <div className="flex items-center space-x-2">
-              <input
-                type="text"
-                readOnly
-                value={
-                  typeof window !== 'undefined'
-                    ? `${window.location.origin.replace('3000', '9822')}/api/webhooks/gmass${
-                        settings?.gmass_webhook_secret ? `?secret=${settings.gmass_webhook_secret}` : ''
-                      }`
-                    : ''
-                }
-                className="block w-full border border-slate-300 rounded-xl px-3.5 py-2 text-xs font-mono text-slate-800 bg-white"
-              />
-              <button
-                type="button"
-                onClick={copyWebhookUrl}
-                className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition-colors flex items-center flex-shrink-0"
-              >
-                {copiedUrl ? <Check className="w-4 h-4 mr-1" /> : <Copy className="w-4 h-4 mr-1" />}
-                {copiedUrl ? 'Copied!' : 'Copy URL'}
-              </button>
-            </div>
-          </div>
-
-          <div className="space-y-3 text-xs text-slate-600 leading-relaxed">
-            <h4 className="font-bold text-slate-900 text-sm">How to configure in GMass Dashboard:</h4>
-            <ol className="list-decimal list-inside space-y-2 ml-1">
-              <li>Log into your <strong>GMass Dashboard</strong> at <a href="https://gmass.co" target="_blank" rel="noreferrer" className="text-indigo-600 underline font-semibold">gmass.co</a>.</li>
-              <li>Navigate to <strong>Account Settings</strong> &rarr; <strong>Webhooks</strong>.</li>
-              <li>Paste the copied URL above into the <strong>Webhook Endpoint URL</strong> field.</li>
-              <li>Check the event checkboxes for: <strong>Sends</strong>, <strong>Opens</strong>, <strong>Clicks</strong>, <strong>Replies</strong>, <strong>Bounces</strong>, and <strong>Unsubscribes</strong>.</li>
-              <li>Click <strong>Save Webhook Settings</strong>. Incoming events will automatically update CRM lead statuses in real time.</li>
-            </ol>
           </div>
         </div>
       )}

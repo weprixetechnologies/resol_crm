@@ -33,7 +33,7 @@ export default function DashboardLayout({ children }) {
   ];
 
   const mailNavigation = [
-    { name: 'GMass Tracking', href: '/email/tracking', icon: Zap, exact: false },
+    { name: 'Email Tracking', href: '/email/tracking', icon: Zap, exact: false },
     { name: 'Compose Mail', href: '/email/compose', icon: Send, exact: false },
     { name: 'Email Templates', href: '/email/templates', icon: FileText, exact: false },
     { name: 'Email Logs', href: '/email/logs', icon: History, exact: false },

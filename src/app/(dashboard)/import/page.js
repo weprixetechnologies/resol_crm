@@ -234,7 +234,7 @@ export default function ImportPage() {
             <p className="text-xs text-slate-400">or drag and drop here</p>
           </div>
           <p className="text-xs text-slate-500 font-medium">Supports up to 100,000 (1 Lakh) rows per file (up to 100MB)</p>
-          <p className="text-xs text-indigo-600">Columns: Name, Email, Mobile, ISD Code (+91), City, State, Designation, Institute, Department, Region, Status, Tag 1, Tag 2, Remark</p>
+          <p className="text-xs text-indigo-600">Columns: Name, Email, Mobile, ISD Code (+91), City, State, Designation, Institute, Department, Country, Status, Tag 1, Tag 2, Remark</p>
         </div>
 
         {file && (

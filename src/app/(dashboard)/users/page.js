@@ -15,9 +15,10 @@ export default function UsersPage() {
   const [search, setSearch] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [advancedFilters, setAdvancedFilters] = useState({
-    city: '', state: '', institute: '', department: '', designation: '', 
-    source: 'all', region_type: 'all', status: 'all', tag1: '', tag2: '', staff_code: '',
-    is_admin_verified: 'all', is_deletion_requested: 'all', startDate: '', endDate: ''
+    city: '', state: '', country: '', institute: '', department: '', designation: '', 
+    source: 'all', status: 'all', tag1: '', tag2: '', staff_code: '',
+    is_deletion_requested: 'all', startDate: '', endDate: '',
+    fromSNo: '', toSNo: ''
   });
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
@@ -64,7 +65,7 @@ export default function UsersPage() {
 
   // Modal State for New Customer Data
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newUserData, setNewUserData] = useState({ name: '', email: '', mobile: '', city: '', status: 'active', tag1: '', tag2: '' });
+  const [newUserData, setNewUserData] = useState({ name: '', email: '', mobile: '', city: '', country: 'India', status: 'active', tag1: '', tag2: '' });
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState('');
   const [fuzzyCandidates, setFuzzyCandidates] = useState(null);
@@ -102,40 +103,28 @@ export default function UsersPage() {
     loadUsers();
   }, [page]);
 
-  const handleExportData = async () => {
-    setExporting(true);
-    try {
-      let url = `/users/export?search=${encodeURIComponent(search)}`;
-      Object.keys(advancedFilters).forEach(key => {
-        if (advancedFilters[key] && advancedFilters[key] !== 'all') {
-          url += `&${key}=${encodeURIComponent(advancedFilters[key])}`;
-        }
-      });
-      
-      const response = await api.get(url, { responseType: 'blob' });
-      const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      const downloadUrl = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = downloadUrl;
-      a.download = `Customer_Data_Export_${new Date().toISOString().slice(0, 10)}.xlsx`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(downloadUrl);
-    } catch (err) {
-      console.error('Export Error:', err);
-      alert('Export failed. Please try again.');
+  const handleStatusChange = async (userId, newStatus) => {
+    // Optimistic UI update
+    setUsers(users.map(u => u.id === userId ? { ...u, status: newStatus } : u));
+
+    const res = await fetchApi(`/users/${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ status: newStatus })
+    });
+
+    if (!res.success) {
+      alert(res.error?.message || 'Failed to update user status');
+      loadUsers(); // revert
     }
-    setExporting(false);
   };
 
-  const handleCreateUser = async (e, overrideFuzzy = false) => {
-    if (e) e.preventDefault();
+  const handleCreateSubmit = async (overrideFuzzy = false) => {
     setCreateLoading(true);
     setCreateError('');
-    
+    if (!overrideFuzzy) setFuzzyCandidates(null);
+
     const payload = { ...newUserData, overrideFuzzy };
-    
+
     const res = await fetchApi('/users', {
       method: 'POST',
       body: JSON.stringify(payload)
@@ -145,31 +134,48 @@ export default function UsersPage() {
 
     if (res.success) {
       setIsModalOpen(false);
-      setNewUserData({ name: '', email: '', mobile: '', city: '', status: 'active', tag1: '', tag2: '' });
+      setNewUserData({ name: '', email: '', mobile: '', city: '', country: 'India', status: 'active', tag1: '', tag2: '' });
       setFuzzyCandidates(null);
       loadUsers();
     } else {
       if (res.error?.code === 'FUZZY_DUPLICATE') {
         setFuzzyCandidates(res.error.candidates);
-        setCreateError('Possible duplicate detected. Review candidates below.');
+      } else if (res.error?.code === 'CUSTOMER_EXISTS') {
+        setCreateError(`Customer Already Exists: Match found on ${res.error.matchedField || 'Email/Mobile'}. New query remark has been automatically logged.`);
       } else {
-        setCreateError(res.error?.message || 'Failed to create record');
+        setCreateError(res.error?.message || 'Failed to create customer record');
       }
     }
   };
 
-  const handleStatusChange = async (userId, newStatus) => {
-    const res = await fetchApi(`/users/${userId}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ status: newStatus })
+  const handleExport = async () => {
+    setExporting(true);
+    let url = '/users/export?';
+    if (search) url += `search=${encodeURIComponent(search)}&`;
+    
+    Object.keys(advancedFilters).forEach(key => {
+      if (advancedFilters[key] && advancedFilters[key] !== 'all') {
+        url += `${key}=${encodeURIComponent(advancedFilters[key])}&`;
+      }
     });
-    if (res.success) {
-      setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: newStatus } : u));
-    } else {
-      alert(res.error?.message || 'Failed to update status');
+
+    try {
+      const res = await api.get(url, { responseType: 'blob' });
+      const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.setAttribute('download', `customer_data_export_${new Date().toISOString().substring(0,10)}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err) {
+      alert('Export failed. Please try again.');
     }
+    setExporting(false);
   };
 
+  // Selection Checkbox Logic
   const selectableUsers = users.filter(u => u.is_deletion_requested !== 1);
   const isAllSelected = selectableUsers.length > 0 && selectableUsers.every(u => selectedUserIds.includes(u.id));
 
@@ -182,17 +188,19 @@ export default function UsersPage() {
   };
 
   const toggleSelectUser = (id) => {
-    setSelectedUserIds(prev => 
-      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
-    );
+    if (selectedUserIds.includes(id)) {
+      setSelectedUserIds(selectedUserIds.filter(i => i !== id));
+    } else {
+      setSelectedUserIds([...selectedUserIds, id]);
+    }
   };
 
-  const handleBulkRequestDeletion = async (e) => {
-    e.preventDefault();
+  const handleBulkDeleteSubmit = async () => {
     if (!bulkDeleteReason.trim()) {
-      setBulkDeleteError('Remarks / reason is required for requesting deletion');
+      setBulkDeleteError('Please enter a reason or remarks for requesting deletion.');
       return;
     }
+
     setBulkDeleteLoading(true);
     setBulkDeleteError('');
 
@@ -205,109 +213,89 @@ export default function UsersPage() {
 
     if (res.success) {
       setIsBulkDeleteModalOpen(false);
-      setBulkDeleteReason('');
       setSelectedUserIds([]);
+      setBulkDeleteReason('');
       loadUsers();
     } else {
-      setBulkDeleteError(res.error?.message || 'Failed to process bulk deletion request');
+      setBulkDeleteError(res.error?.message || 'Failed to submit deletion request');
     }
   };
 
+  const baseSNo = advancedFilters.fromSNo ? Math.max(1, parseInt(advancedFilters.fromSNo)) : 1;
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-7xl mx-auto pb-12">
+      {/* Top Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Customer Data</h1>
-          <p className="text-sm text-slate-500 mt-1">Manage customer contacts and track activity.</p>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Customer Database</h1>
+          <p className="text-sm text-slate-500 mt-1">Manage, search, filter, and track customer contact information & query logs.</p>
         </div>
-        <div className="flex items-center gap-3">
+
+        <div className="flex flex-wrap items-center gap-3">
           <button
-            onClick={handleExportData}
+            onClick={handleExport}
             disabled={exporting}
-            className="inline-flex items-center px-4 py-2.5 bg-emerald-600 text-white font-medium text-sm rounded-xl hover:bg-emerald-700 shadow-sm transition-colors disabled:opacity-70"
+            className="inline-flex items-center px-4 py-2.5 bg-white border border-slate-300 text-slate-700 font-semibold text-sm rounded-xl hover:bg-slate-50 transition-colors shadow-xs disabled:opacity-50"
           >
-            {exporting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
-            Export Data
+            {exporting ? <Loader2 className="w-4 h-4 mr-2 animate-spin text-indigo-600" /> : <Download className="w-4 h-4 mr-2 text-indigo-600" />}
+            {exporting ? 'Exporting...' : 'Export Excel'}
           </button>
+
           <button
             onClick={() => setIsModalOpen(true)}
-            className="inline-flex items-center px-4 py-2.5 bg-indigo-600 text-white font-medium text-sm rounded-xl hover:bg-indigo-700 shadow-sm transition-colors"
+            className="inline-flex items-center px-4 py-2.5 bg-indigo-600 text-white font-semibold text-sm rounded-xl hover:bg-indigo-700 transition-colors shadow-sm"
           >
-            <UserPlus className="w-4 h-4 mr-2" />
-            New Customer
+            <UserPlus className="w-4 h-4 mr-2" /> Add Customer
           </button>
         </div>
       </div>
 
-      {/* Bulk Selection Bar */}
-      {selectedUserIds.length > 0 && (
-        <div className="bg-rose-50 border border-rose-200 p-3.5 px-5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between shadow-sm gap-3">
-          <div className="flex items-center space-x-2.5">
-            <span className="flex h-3 w-3 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-600"></span>
-            </span>
-            <span className="text-sm font-bold text-rose-900">
-              {selectedUserIds.length} customer(s) selected for deletion
-            </span>
-          </div>
-          <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
-            <Link
-              href={`/email/compose?users=${selectedUserIds.join(',')}`}
-              className="inline-flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs tracking-wide rounded-xl shadow-md transition-all transform active:scale-95 uppercase"
-            >
-              <Mail className="w-4 h-4 mr-1.5" />
-              COMPOSE MAIL
-            </Link>
-            <button
-              onClick={() => setSelectedUserIds([])}
-              className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 rounded-xl shadow-xs transition-colors"
-            >
-              Clear Selection
-            </button>
-            <button
-              onClick={() => {
-                setBulkDeleteError('');
-                setBulkDeleteReason('');
-                setIsBulkDeleteModalOpen(true);
-              }}
-              className="inline-flex items-center px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs tracking-wide rounded-xl shadow-md transition-all transform active:scale-95 uppercase"
-            >
-              <Trash2 className="w-4 h-4 mr-1.5" />
-              REQUEST DELETION
-            </button>
-          </div>
-        </div>
-      )}
-
+      {/* Main Table Card */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50/50">
-          <div className="flex w-full sm:w-auto flex-1 gap-3">
-            <div className="relative max-w-md w-full">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search className="h-5 w-5 text-slate-400" />
-              </div>
-              <input
-                type="text"
-                placeholder="Search customer data by name, email, or mobile..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="block w-full pl-10 pr-3 py-2 border border-slate-200 rounded-xl leading-5 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent sm:text-sm transition-shadow"
-              />
-            </div>
+        {/* Search & Filter Bar */}
+        <div className="p-4 border-b border-slate-200 bg-slate-50/50 flex flex-col md:flex-row gap-4 items-center justify-between">
+          <div className="relative w-full md:w-96">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+            <input
+              type="text"
+              placeholder="Search by name, email, mobile, city, tags..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+            />
+            {search && (
+              <button onClick={() => setSearch('')} className="absolute right-3 top-3 text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
+            {/* Bulk Deletion Action Button */}
+            {selectedUserIds.length > 0 && (
+              <button
+                onClick={() => { setBulkDeleteReason(''); setBulkDeleteError(''); setIsBulkDeleteModalOpen(true); }}
+                className="inline-flex items-center px-3.5 py-2 bg-rose-50 border border-rose-200 text-rose-700 font-semibold text-xs rounded-xl hover:bg-rose-100 transition-colors shadow-xs"
+              >
+                <Trash2 className="w-3.5 h-3.5 mr-1.5 text-rose-600" />
+                Request Deletion ({selectedUserIds.length})
+              </button>
+            )}
+
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className={`inline-flex items-center px-4 py-2 border rounded-xl text-sm font-medium transition-colors ${showFilters ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+              className={`inline-flex items-center px-3.5 py-2 text-xs font-semibold rounded-xl border transition-colors ${
+                showFilters ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+              }`}
             >
-              <Filter className="w-4 h-4 mr-2" />
-              Filters
-              {Object.values(advancedFilters).some(v => v !== '' && v !== 'all') && (
-                <span className="ml-2 w-2 h-2 rounded-full bg-indigo-600"></span>
-              )}
+              <Filter className="w-3.5 h-3.5 mr-1.5" />
+              Filters {Object.values(advancedFilters).some(v => v && v !== 'all') && <span className="w-2 h-2 rounded-full bg-indigo-600 ml-1"></span>}
             </button>
-          </div>
-          <div className="text-sm text-slate-500 font-medium whitespace-nowrap">
-            Total: {total}
+
+            <div className="text-xs text-slate-500 font-medium">
+              Total: {total}
+            </div>
           </div>
         </div>
 
@@ -318,9 +306,10 @@ export default function UsersPage() {
               <h3 className="text-sm font-semibold text-slate-800">Advanced Filters</h3>
               <button 
                 onClick={() => setAdvancedFilters({
-                  city: '', state: '', institute: '', department: '', designation: '', 
-                  source: 'all', region_type: 'all', status: 'all', tag1: '', tag2: '', staff_code: '',
-                  is_admin_verified: 'all', is_deletion_requested: 'all', startDate: '', endDate: ''
+                  city: '', state: '', country: '', institute: '', department: '', designation: '', 
+                  source: 'all', status: 'all', tag1: '', tag2: '', staff_code: '',
+                  is_deletion_requested: 'all', startDate: '', endDate: '',
+                  fromSNo: '', toSNo: ''
                 })}
                 className="text-xs text-indigo-600 hover:text-indigo-800 font-medium flex items-center"
               >
@@ -329,6 +318,30 @@ export default function UsersPage() {
             </div>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {/* Serial Range Filter */}
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Serial Range (S.No.)</label>
+                <div className="flex items-center space-x-1.5">
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="From (e.g. 1)"
+                    value={advancedFilters.fromSNo}
+                    onChange={e => setAdvancedFilters({...advancedFilters, fromSNo: e.target.value})}
+                    className="block w-full border border-slate-300 rounded-lg shadow-sm py-1.5 px-2.5 text-xs focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                  <span className="text-xs text-slate-400 font-medium">to</span>
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="To (e.g. 500)"
+                    value={advancedFilters.toSNo}
+                    onChange={e => setAdvancedFilters({...advancedFilters, toSNo: e.target.value})}
+                    className="block w-full border border-slate-300 rounded-lg shadow-sm py-1.5 px-2.5 text-xs focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
               {/* Status Select Filter */}
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1">Status</label>
@@ -341,6 +354,18 @@ export default function UsersPage() {
                   <option value="active">Active</option>
                   <option value="unverified">Unverified</option>
                 </select>
+              </div>
+
+              {/* Country Text Filter */}
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Country</label>
+                <input
+                  type="text"
+                  placeholder="Filter by Country (e.g. India, USA)"
+                  value={advancedFilters.country}
+                  onChange={e => setAdvancedFilters({...advancedFilters, country: e.target.value})}
+                  className="block w-full border border-slate-300 rounded-lg shadow-sm py-1.5 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                />
               </div>
 
               {/* Tag 1 & Tag 2 Filters */}
@@ -413,32 +438,6 @@ export default function UsersPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Region Type</label>
-                <select
-                  value={advancedFilters.region_type}
-                  onChange={e => setAdvancedFilters({...advancedFilters, region_type: e.target.value})}
-                  className="block w-full border border-slate-300 rounded-lg shadow-sm py-1.5 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                >
-                  <option value="all">All Regions</option>
-                  <option value="indian">Indian</option>
-                  <option value="foreign">Foreign</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Admin Verified</label>
-                <select
-                  value={advancedFilters.is_admin_verified}
-                  onChange={e => setAdvancedFilters({...advancedFilters, is_admin_verified: e.target.value})}
-                  className="block w-full border border-slate-300 rounded-lg shadow-sm py-1.5 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                >
-                  <option value="all">All Status</option>
-                  <option value="1">Verified</option>
-                  <option value="0">Not Verified</option>
-                </select>
-              </div>
-
-              <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1">Deletion Status</label>
                 <select
                   value={advancedFilters.is_deletion_requested}
@@ -450,103 +449,40 @@ export default function UsersPage() {
                   <option value="1">Deletion Requested</option>
                 </select>
               </div>
+            </div>
 
-              {/* Dates */}
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Created From</label>
+            {/* Quick Date Presets Row */}
+            <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold text-slate-600 flex items-center mr-1">
+                <Calendar className="w-3.5 h-3.5 mr-1 text-slate-400" /> Date Presets:
+              </span>
+              <button onClick={() => applyDatePreset('today')} className="px-2.5 py-1 text-xs bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 font-medium rounded-lg transition-colors text-slate-700">Today</button>
+              <button onClick={() => applyDatePreset('yesterday')} className="px-2.5 py-1 text-xs bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 font-medium rounded-lg transition-colors text-slate-700">Yesterday</button>
+              <button onClick={() => applyDatePreset('7d')} className="px-2.5 py-1 text-xs bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 font-medium rounded-lg transition-colors text-slate-700">Last 7 Days</button>
+              <button onClick={() => applyDatePreset('30d')} className="px-2.5 py-1 text-xs bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 font-medium rounded-lg transition-colors text-slate-700">Last 30 Days</button>
+              <button onClick={() => applyDatePreset('this_month')} className="px-2.5 py-1 text-xs bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 font-medium rounded-lg transition-colors text-slate-700">This Month</button>
+              
+              <div className="flex items-center space-x-2 ml-auto">
                 <input
                   type="date"
                   value={advancedFilters.startDate}
                   onChange={e => setAdvancedFilters({...advancedFilters, startDate: e.target.value})}
-                  className="block w-full border border-slate-300 rounded-lg shadow-sm py-1.5 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-slate-600"
+                  className="border border-slate-200 rounded-lg text-xs py-1 px-2 text-slate-700"
                 />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Created To</label>
+                <span className="text-xs text-slate-400">to</span>
                 <input
                   type="date"
                   value={advancedFilters.endDate}
                   onChange={e => setAdvancedFilters({...advancedFilters, endDate: e.target.value})}
-                  className="block w-full border border-slate-300 rounded-lg shadow-sm py-1.5 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-slate-600"
+                  className="border border-slate-200 rounded-lg text-xs py-1 px-2 text-slate-700"
                 />
               </div>
-
-              {/* Quick Date Presets Bar */}
-              <div className="col-span-full border-t border-slate-100 pt-3 mt-1">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div className="flex items-center text-xs font-semibold text-slate-700">
-                    <Calendar className="w-4 h-4 mr-1.5 text-indigo-500" />
-                    Quick Date Range Presets:
-                  </div>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => applyDatePreset('today')}
-                      className={`px-2.5 py-1 text-xs font-medium rounded-lg transition-colors ${advancedFilters.startDate && advancedFilters.startDate === advancedFilters.endDate && advancedFilters.startDate === new Date().toISOString().slice(0, 10) ? 'bg-indigo-600 text-white font-bold' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}`}
-                    >
-                      Today
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => applyDatePreset('yesterday')}
-                      className="px-2.5 py-1 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors"
-                    >
-                      Yesterday
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => applyDatePreset('7d')}
-                      className="px-2.5 py-1 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors"
-                    >
-                      Last 7 Days
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => applyDatePreset('30d')}
-                      className="px-2.5 py-1 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors"
-                    >
-                      Last 30 Days
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => applyDatePreset('this_month')}
-                      className="px-2.5 py-1 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors"
-                    >
-                      This Month
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => applyDatePreset('clear')}
-                      className="px-2.5 py-1 text-xs font-medium bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition-colors"
-                    >
-                      Clear Dates
-                    </button>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
         )}
 
-        {/* Active Date Range Banner */}
-        {(advancedFilters.startDate || advancedFilters.endDate) && (
-          <div className="px-4 py-2.5 bg-indigo-50/80 border-b border-indigo-100 flex items-center justify-between text-xs font-medium text-indigo-900">
-            <div className="flex items-center space-x-2">
-              <Calendar className="w-4 h-4 text-indigo-600 flex-shrink-0" />
-              <span>
-                Filtered by Date Range: <strong className="font-bold text-indigo-950">{advancedFilters.startDate || 'Beginning'}</strong> to <strong className="font-bold text-indigo-950">{advancedFilters.endDate || 'Today'}</strong>
-              </span>
-            </div>
-            <button
-              onClick={() => applyDatePreset('clear')}
-              className="text-xs text-indigo-700 hover:text-indigo-900 font-bold underline ml-3 flex-shrink-0"
-            >
-              Clear Date Filter
-            </button>
-          </div>
-        )}
-
-        <div className="overflow-x-auto min-h-[400px]">
+        {/* Customer Table */}
+        <div className="overflow-x-auto">
           {loading ? (
             <div className="flex justify-center items-center h-64">
               <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
@@ -564,12 +500,13 @@ export default function UsersPage() {
                       className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-slate-300 rounded cursor-pointer disabled:opacity-30"
                     />
                   </th>
+                  <th scope="col" className="px-3 py-4 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">S.No.</th>
                   <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Name</th>
                   <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
                   <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Tag 1</th>
                   <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Tag 2</th>
                   <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Contact</th>
-                  <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Location</th>
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Location & Country</th>
                   <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Source</th>
                   <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Staff Code</th>
                   <th scope="col" className="relative px-6 py-4"><span className="sr-only">Actions</span></th>
@@ -578,356 +515,356 @@ export default function UsersPage() {
               <tbody className="bg-white divide-y divide-slate-100">
                 {users.length === 0 ? (
                   <tr>
-                    <td colSpan="10" className="px-6 py-12 text-center text-slate-500">No customer data found.</td>
+                    <td colSpan="11" className="px-6 py-12 text-center text-slate-500">No customer data found.</td>
                   </tr>
                 ) : (
-                  users.map((u) => (
-                    <tr key={u.id} className={`hover:bg-slate-50/80 transition-colors ${selectedUserIds.includes(u.id) ? 'bg-indigo-50/40' : ''}`}>
-                      <td className="px-4 py-4 whitespace-nowrap text-center">
-                        <input
-                          type="checkbox"
-                          checked={selectedUserIds.includes(u.id)}
-                          onChange={() => toggleSelectUser(u.id)}
-                          disabled={u.is_deletion_requested === 1}
-                          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-slate-300 rounded cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                        />
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0 h-10 w-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center font-bold">
-                            {u.name.charAt(0).toUpperCase()}
+                  users.map((u, idx) => {
+                    const rowSNo = (page - 1) * 10 + baseSNo + idx;
+                    return (
+                      <tr key={u.id} className={`hover:bg-slate-50/80 transition-colors ${selectedUserIds.includes(u.id) ? 'bg-indigo-50/40' : ''}`}>
+                        <td className="px-4 py-4 whitespace-nowrap text-center">
+                          <input
+                            type="checkbox"
+                            checked={selectedUserIds.includes(u.id)}
+                            onChange={() => toggleSelectUser(u.id)}
+                            disabled={u.is_deletion_requested === 1}
+                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-slate-300 rounded cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                          />
+                        </td>
+                        <td className="px-3 py-4 whitespace-nowrap text-center text-xs font-bold font-mono text-slate-600">
+                          {rowSNo}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <div className="flex-shrink-0 h-10 w-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center font-bold">
+                              {u.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="ml-4">
+                              <div className="text-sm font-semibold text-slate-900">{u.name}</div>
+                              {u.is_deletion_requested === 1 && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 mt-1">
+                                  Pending Deletion
+                                </span>
+                              )}
+                            </div>
                           </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-semibold text-slate-900">{u.name}</div>
-                            {u.is_deletion_requested === 1 && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 mt-1">
-                                Pending Deletion
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <select
-                          value={u.status || 'active'}
-                          onChange={(e) => handleStatusChange(u.id, e.target.value)}
-                          className={`text-xs font-semibold rounded-full px-2.5 py-1 border cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${
-                            (u.status || 'active') === 'unverified'
-                              ? 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
-                              : 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
-                          }`}
-                        >
-                          <option value="active">active</option>
-                          <option value="unverified">unverified</option>
-                        </select>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {u.tag1 ? (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
-                            {u.tag1}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <select
+                            value={u.status || 'active'}
+                            onChange={(e) => handleStatusChange(u.id, e.target.value)}
+                            className={`text-xs font-semibold rounded-full px-2.5 py-1 border cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${
+                              (u.status || 'active') === 'unverified'
+                                ? 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
+                                : 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                            }`}
+                          >
+                            <option value="active">active</option>
+                            <option value="unverified">unverified</option>
+                          </select>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {u.tag1 ? (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
+                              {u.tag1}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 text-xs">-</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {u.tag2 ? (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-purple-50 text-purple-700 border border-purple-100">
+                              {u.tag2}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 text-xs">-</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-slate-900">{u.email || '-'}</div>
+                          <div className="text-sm text-slate-500">{u.country_code ? `${u.country_code} ` : ''}{u.mobile || '-'}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-semibold text-slate-900">{u.city || '-'}</div>
+                          <div className="text-xs text-slate-500">{u.country || u.region_type || '-'}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize
+                            ${u.source === 'import' ? 'bg-purple-100 text-purple-800' : 
+                              u.source === 'public_form' ? 'bg-emerald-100 text-emerald-800' : 
+                              'bg-blue-100 text-blue-800'}`}
+                          >
+                            {u.source ? u.source.replace('_', ' ') : 'Manual'}
                           </span>
-                        ) : (
-                          <span className="text-slate-400 text-xs">-</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {u.tag2 ? (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-purple-50 text-purple-700 border border-purple-100">
-                            {u.tag2}
-                          </span>
-                        ) : (
-                          <span className="text-slate-400 text-xs">-</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-slate-900">{u.email || '-'}</div>
-                        <div className="text-sm text-slate-500">{u.country_code ? `${u.country_code} ` : ''}{u.mobile || '-'}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-slate-900">{u.city || '-'}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize
-                          ${u.source === 'import' ? 'bg-purple-100 text-purple-800' : 
-                            u.source === 'public_form' ? 'bg-emerald-100 text-emerald-800' : 
-                            'bg-blue-100 text-blue-800'}`}>
-                          {u.source.replace('_', ' ')}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-mono font-semibold bg-slate-100 text-slate-700 border border-slate-200">
-                          {u.created_by_code || u.staff_code || '-'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <div className="flex items-center justify-end space-x-3">
-                          <Link href={`/email/compose?userId=${u.id}`} title="Send Email" className="text-slate-400 hover:text-indigo-600 transition-colors inline-flex items-center p-1 rounded-lg hover:bg-slate-100">
-                            <Mail className="w-4 h-4" />
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 font-mono">
+                          {u.created_by_code || '-'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <Link
+                            href={`/users/${u.id}`}
+                            className="inline-flex items-center px-3 py-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors"
+                          >
+                            <Eye className="w-4 h-4 mr-1" /> View / Edit
                           </Link>
-                          <Link href={`/users/${u.id}`} className="text-indigo-600 hover:text-indigo-900 inline-flex items-center">
-                            <Eye className="w-4 h-4 mr-1" /> View
-                          </Link>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
           )}
         </div>
 
-        {/* Pagination */}
-        <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between bg-slate-50">
-          <div className="flex-1 flex justify-between sm:hidden">
-            <button
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="relative inline-flex items-center px-4 py-2 border border-slate-300 text-sm font-medium rounded-md text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-50"
-            >
-              Previous
-            </button>
-            <button
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-              className="ml-3 relative inline-flex items-center px-4 py-2 border border-slate-300 text-sm font-medium rounded-md text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-50"
-            >
-              Next
-            </button>
+        {/* Pagination Bar */}
+        <div className="p-4 border-t border-slate-200 bg-slate-50/50 flex flex-col sm:flex-row justify-between items-center gap-4">
+          <div className="text-sm text-slate-500">
+            Showing <span className="font-semibold text-slate-900">{total === 0 ? 0 : (page - 1) * 10 + 1}</span> to{' '}
+            <span className="font-semibold text-slate-900">{Math.min(page * 10, total)}</span> of{' '}
+            <span className="font-semibold text-slate-900">{total}</span> customers
           </div>
-          <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm text-slate-700">
-                Showing page <span className="font-semibold">{page}</span> of <span className="font-semibold">{totalPages || 1}</span>
-              </p>
-            </div>
-            <div>
-              <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                <button
-                  onClick={() => setPage(p => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50 disabled:opacity-50"
-                >
-                  <span className="sr-only">Previous</span>
-                  <ChevronLeft className="h-5 w-5" aria-hidden="true" />
-                </button>
-                <button
-                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages}
-                  className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-slate-300 bg-white text-sm font-medium text-slate-500 hover:bg-slate-50 disabled:opacity-50"
-                >
-                  <span className="sr-only">Next</span>
-                  <ChevronRight className="h-5 w-5" aria-hidden="true" />
-                </button>
-              </nav>
-            </div>
+
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="p-2 border border-slate-200 rounded-xl bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="text-sm font-medium text-slate-700 px-2">
+              Page {page} of {totalPages}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages || totalPages === 0}
+              className="p-2 border border-slate-200 rounded-xl bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </div>
 
-      {/* New Customer Data Modal */}
+      {/* Add Customer Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm transition-opacity" onClick={() => setIsModalOpen(false)}></div>
-            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-            <div className="relative z-10 inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-              <form onSubmit={(e) => handleCreateUser(e, false)}>
-                <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                  <h3 className="text-xl font-semibold text-slate-900 mb-4" id="modal-title">Create New Customer Data</h3>
-                  
-                  {createError && (
-                    <div className="mb-4 p-3 bg-rose-50 text-rose-600 text-sm rounded-xl border border-rose-100 flex items-start">
-                      <AlertTriangle className="w-5 h-5 mr-2 flex-shrink-0" />
-                      <div>{createError}</div>
-                    </div>
-                  )}
+        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl overflow-hidden">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+              <h3 className="text-lg font-bold text-slate-900">Add New Customer</h3>
+              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
-                  {fuzzyCandidates && (
-                    <div className="mb-4 p-3 bg-amber-50 rounded-xl border border-amber-200">
-                      <h4 className="text-sm font-medium text-amber-800 mb-2">Did you mean one of these records?</h4>
-                      <ul className="space-y-2 mb-3">
-                        {fuzzyCandidates.map(c => (
-                          <li key={c.id} className="text-xs text-amber-900 bg-amber-100/50 p-2 rounded">
-                            <span className="font-semibold">{c.name}</span> ({c.email || c.mobile}) - match: {(c.fuzzyScore * 100).toFixed(1)}%
-                          </li>
-                        ))}
-                      </ul>
-                      <button
-                        type="button"
-                        onClick={() => handleCreateUser(null, true)}
-                        className="text-sm bg-amber-600 text-white px-3 py-1.5 rounded hover:bg-amber-700"
-                      >
-                        Yes, create anyway (Override)
-                      </button>
-                    </div>
-                  )}
+            <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+              {createError && (
+                <div className="p-3 bg-rose-50 text-rose-600 text-xs rounded-xl border border-rose-100 flex items-center">
+                  <AlertTriangle className="w-4 h-4 mr-2 flex-shrink-0" />
+                  {createError}
+                </div>
+              )}
 
-                  <div className="space-y-4">
+              {/* Fuzzy Match Warning */}
+              {fuzzyCandidates && fuzzyCandidates.length > 0 && (
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-3">
+                  <div className="flex items-start">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 mr-2 flex-shrink-0 mt-0.5" />
                     <div>
-                      <label className="block text-sm font-medium text-slate-700">Name</label>
-                      <input
-                        type="text" required
-                        value={newUserData.name}
-                        onChange={e => setNewUserData({...newUserData, name: e.target.value})}
-                        className="mt-1 block w-full border border-slate-300 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700">Email</label>
-                      <input
-                        type="email"
-                        value={newUserData.email}
-                        onChange={e => setNewUserData({...newUserData, email: e.target.value})}
-                        className="mt-1 block w-full border border-slate-300 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700">Mobile</label>
-                      <input
-                        type="text"
-                        value={newUserData.mobile}
-                        onChange={e => setNewUserData({...newUserData, mobile: e.target.value})}
-                        className="mt-1 block w-full border border-slate-300 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700">City</label>
-                      <input
-                        type="text"
-                        value={newUserData.city}
-                        onChange={e => setNewUserData({...newUserData, city: e.target.value})}
-                        className="mt-1 block w-full border border-slate-300 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700">Status</label>
-                      <select
-                        value={newUserData.status}
-                        onChange={e => setNewUserData({...newUserData, status: e.target.value})}
-                        className="mt-1 block w-full border border-slate-300 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm font-medium"
-                      >
-                        <option value="active">Active</option>
-                        <option value="unverified">Unverified</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700">Tag 1</label>
-                      <input
-                        type="text"
-                        value={newUserData.tag1}
-                        onChange={e => setNewUserData({...newUserData, tag1: e.target.value})}
-                        placeholder="Enter Tag 1 text"
-                        className="mt-1 block w-full border border-slate-300 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700">Tag 2</label>
-                      <input
-                        type="text"
-                        value={newUserData.tag2}
-                        onChange={e => setNewUserData({...newUserData, tag2: e.target.value})}
-                        placeholder="Enter Tag 2 text"
-                        className="mt-1 block w-full border border-slate-300 rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                      />
+                      <h4 className="text-xs font-bold text-amber-900">Possible Similar Customer Found</h4>
+                      <p className="text-xs text-amber-700 mt-0.5">We found existing customers with similar details in the system:</p>
                     </div>
                   </div>
+                  <div className="space-y-2">
+                    {fuzzyCandidates.map((c, i) => (
+                      <div key={i} className="text-xs bg-white p-2.5 rounded-lg border border-amber-100 text-slate-700">
+                        <strong className="text-slate-900">{c.name}</strong> — {c.email || 'No email'} | {c.mobile || 'No mobile'} ({c.city || 'No city'})
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex justify-end space-x-2 pt-2">
+                    <button
+                      onClick={() => setFuzzyCandidates(null)}
+                      className="px-3 py-1.5 bg-white border border-amber-300 text-amber-800 text-xs font-medium rounded-lg hover:bg-amber-100"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => handleCreateSubmit(true)}
+                      className="px-3 py-1.5 bg-amber-600 text-white text-xs font-bold rounded-lg hover:bg-amber-700 shadow-xs"
+                    >
+                      Create Anyway (Override)
+                    </button>
+                  </div>
                 </div>
-                <div className="bg-slate-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse border-t border-slate-100">
-                  <button
-                    type="submit"
-                    disabled={createLoading}
-                    className="w-full inline-flex justify-center rounded-xl border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-70"
-                  >
-                    {createLoading ? 'Creating...' : 'Create Customer Data'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsModalOpen(false)}
-                    className="mt-3 w-full inline-flex justify-center rounded-xl border border-slate-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-slate-700 hover:bg-slate-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-                  >
-                    Cancel
-                  </button>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Full Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={newUserData.name}
+                    onChange={(e) => setNewUserData({ ...newUserData, name: e.target.value })}
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    placeholder="e.g. John Doe"
+                  />
                 </div>
-              </form>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Status</label>
+                  <select
+                    value={newUserData.status}
+                    onChange={(e) => setNewUserData({ ...newUserData, status: e.target.value })}
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                  >
+                    <option value="active">active</option>
+                    <option value="unverified">unverified</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Email</label>
+                  <input
+                    type="email"
+                    value={newUserData.email}
+                    onChange={(e) => setNewUserData({ ...newUserData, email: e.target.value })}
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    placeholder="john@example.com"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Mobile</label>
+                  <input
+                    type="text"
+                    value={newUserData.mobile}
+                    onChange={(e) => setNewUserData({ ...newUserData, mobile: e.target.value })}
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    placeholder="9876543210"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">City</label>
+                  <input
+                    type="text"
+                    value={newUserData.city}
+                    onChange={(e) => setNewUserData({ ...newUserData, city: e.target.value })}
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    placeholder="e.g. Mumbai"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Country</label>
+                  <input
+                    type="text"
+                    value={newUserData.country}
+                    onChange={(e) => setNewUserData({ ...newUserData, country: e.target.value })}
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    placeholder="e.g. India, USA, UK"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Tag 1</label>
+                  <input
+                    type="text"
+                    value={newUserData.tag1}
+                    onChange={(e) => setNewUserData({ ...newUserData, tag1: e.target.value })}
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    placeholder="e.g. VIP, Client"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Tag 2</label>
+                  <input
+                    type="text"
+                    value={newUserData.tag2}
+                    onChange={(e) => setNewUserData({ ...newUserData, tag2: e.target.value })}
+                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    placeholder="e.g. Workshop2026"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end space-x-3">
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm font-semibold rounded-xl hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleCreateSubmit(false)}
+                disabled={createLoading || !newUserData.name}
+                className="px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-xl hover:bg-indigo-700 disabled:opacity-50 flex items-center shadow-xs"
+              >
+                {createLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />} Save Record
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Bulk Deletion Modal */}
+      {/* Bulk Deletion Request Modal */}
       {isBulkDeleteModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="bulk-delete-title" role="dialog" aria-modal="true">
-          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm transition-opacity" onClick={() => setIsBulkDeleteModalOpen(false)}></div>
-            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-            <div className="relative z-10 inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-              <form onSubmit={handleBulkRequestDeletion}>
-                <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                  <div className="flex items-center space-x-3 mb-4">
-                    <div className="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 flex-shrink-0">
-                      <Trash2 className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold text-slate-900" id="bulk-delete-title">
-                        Request Deletion ({selectedUserIds.length} selected)
-                      </h3>
-                      <p className="text-xs text-slate-500">
-                        This request will be sent to the admin approval queue.
-                      </p>
-                    </div>
-                  </div>
+        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+              <div className="flex items-center space-x-2 text-rose-600">
+                <Trash2 className="w-5 h-5" />
+                <h3 className="text-lg font-bold text-slate-900">Request Bulk Deletion</h3>
+              </div>
+              <button onClick={() => setIsBulkDeleteModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
-                  {bulkDeleteError && (
-                    <div className="mb-4 p-3 bg-rose-50 text-rose-600 text-sm rounded-xl border border-rose-100 flex items-start">
-                      <AlertTriangle className="w-5 h-5 mr-2 flex-shrink-0" />
-                      <div>{bulkDeleteError}</div>
-                    </div>
-                  )}
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-slate-600">
+                You are requesting deletion for <strong className="font-bold text-slate-900">{selectedUserIds.length}</strong> selected customer(s). Please provide a reason/remark for the administrator.
+              </p>
 
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
-                        Remarks / Deletion Reason <span className="text-rose-500">*</span>
-                      </label>
-                      <textarea
-                        required
-                        rows="3"
-                        value={bulkDeleteReason}
-                        onChange={(e) => setBulkDeleteReason(e.target.value)}
-                        placeholder="Enter remarks or reason for deleting the selected customers..."
-                        className="w-full border border-slate-300 rounded-xl p-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500"
-                      ></textarea>
-                      <p className="text-[11px] text-slate-500 mt-1">
-                        Add remarks one time for all selected customers.
-                      </p>
-                    </div>
-                  </div>
+              {bulkDeleteError && (
+                <div className="p-3 bg-rose-50 text-rose-600 text-xs rounded-xl border border-rose-100 flex items-center">
+                  <AlertTriangle className="w-4 h-4 mr-2 flex-shrink-0" />
+                  {bulkDeleteError}
                 </div>
+              )}
 
-                <div className="bg-slate-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse border-t border-slate-100 gap-2">
-                  <button
-                    type="submit"
-                    disabled={bulkDeleteLoading}
-                    className="w-full inline-flex justify-center rounded-xl border border-transparent shadow-sm px-4 py-2.5 bg-rose-600 text-sm font-bold text-white hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rose-500 sm:w-auto disabled:opacity-70 uppercase tracking-wide"
-                  >
-                    {bulkDeleteLoading ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Processing...
-                      </>
-                    ) : (
-                      'PROCESS REQUEST DELETION'
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsBulkDeleteModalOpen(false)}
-                    className="mt-3 w-full inline-flex justify-center rounded-xl border border-slate-300 shadow-sm px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none sm:mt-0 sm:w-auto"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Reason / Remarks *</label>
+                <textarea
+                  rows={3}
+                  value={bulkDeleteReason}
+                  onChange={(e) => setBulkDeleteReason(e.target.value)}
+                  className="w-full border border-slate-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-rose-500 focus:outline-none"
+                  placeholder="e.g. Duplicate records cleanup / Customer requested data removal..."
+                />
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end space-x-3">
+              <button
+                onClick={() => setIsBulkDeleteModalOpen(false)}
+                className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm font-semibold rounded-xl hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBulkDeleteSubmit}
+                disabled={bulkDeleteLoading || !bulkDeleteReason.trim()}
+                className="px-4 py-2 bg-rose-600 text-white text-sm font-semibold rounded-xl hover:bg-rose-700 disabled:opacity-50 flex items-center shadow-xs"
+              >
+                {bulkDeleteLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />} Submit Request
+              </button>
             </div>
           </div>
         </div>

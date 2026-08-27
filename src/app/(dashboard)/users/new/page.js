@@ -15,7 +15,8 @@ export default function NewUserForm() {
     designation: '',
     institute: '',
     department: '',
-    region_type: 'indian',
+    country: 'India',
+    region_type: 'India',
     country_code: '',
     status: 'active',
     tag1: '',
@@ -239,20 +240,14 @@ export default function NewUserForm() {
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="md:col-span-1">
-                <label className="block text-sm font-medium text-slate-700 mb-2">Region</label>
-                <div className="relative">
-                  <select 
-                    name="region_type" 
-                    value={formData.region_type} onChange={handleChange}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all appearance-none"
-                  >
-                    <option value="indian">Indian</option>
-                    <option value="abroad">Abroad</option>
-                  </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-                  </div>
-                </div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Country</label>
+                <input 
+                  type="text" name="country" 
+                  value={formData.country !== undefined ? formData.country : formData.region_type}
+                  onChange={(e) => setFormData({ ...formData, country: e.target.value, region_type: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
+                  placeholder="e.g. India, USA, UK"
+                />
               </div>
               <div className="md:col-span-1">
                 <label className="block text-sm font-medium text-slate-700 mb-2">State</label>

@@ -6,7 +6,7 @@ import { fetchApi } from '@/lib/api';
 import { 
   Send, Users, FileText, Sparkles, Plus, Check, Loader2, Search, 
   X, Eye, Tag, AlertCircle, CheckCircle2, History, Save, Filter,
-  CheckSquare, Square, ChevronRight, UserCheck, Shield, Building, MapPin
+  CheckSquare, Square, ChevronLeft, ChevronRight, UserCheck, Shield, Building, MapPin
 } from 'lucide-react';
 
 const DYNAMIC_TAGS = [
@@ -30,13 +30,18 @@ function ComposeMailContent() {
   const [selectedCustomers, setSelectedCustomers] = useState([]);
   const [customEmails, setCustomEmails] = useState('');
 
-  // Customer Modal & Search State
+  // Customer Modal & Server Search/Pagination State
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
   const [allCustomers, setAllCustomers] = useState([]);
+  const [modalTotal, setModalTotal] = useState(0);
+  const [modalPage, setModalPage] = useState(1);
+  const [modalTotalPages, setModalTotalPages] = useState(1);
   const [modalSearch, setModalSearch] = useState('');
   const [modalStaffFilter, setModalStaffFilter] = useState('all');
   const [modalTagFilter, setModalTagFilter] = useState('all');
   const [modalLoading, setModalLoading] = useState(false);
+  const [sendToAllMatching, setSendToAllMatching] = useState(false);
+  const [matchingCriteria, setMatchingCriteria] = useState(null);
   const [hoveredCustomer, setHoveredCustomer] = useState(null);
 
   // Template & Content State
@@ -100,17 +105,36 @@ function ComposeMailContent() {
     }
   };
 
-  const openCustomerModal = async () => {
-    setIsCustomerModalOpen(true);
-    if (allCustomers.length === 0) {
-      setModalLoading(true);
-      const res = await fetchApi('/users?limit=500');
-      if (res.success) {
-        setAllCustomers(res.data.items || []);
-      }
-      setModalLoading(false);
+  const fetchModalCustomers = async (p = 1, s = modalSearch, staff = modalStaffFilter, tag = modalTagFilter) => {
+    setModalLoading(true);
+    let url = `/users?page=${p}&limit=50`;
+    if (s && s.trim()) url += `&search=${encodeURIComponent(s.trim())}`;
+    if (staff && staff !== 'all') url += `&staff_code=${encodeURIComponent(staff)}`;
+    if (tag && tag !== 'all') url += `&tag1=${encodeURIComponent(tag)}`;
+
+    const res = await fetchApi(url);
+    if (res.success && res.data) {
+      setAllCustomers(res.data.items || []);
+      setModalTotal(res.data.total || 0);
+      setModalPage(res.data.page || 1);
+      setModalTotalPages(res.data.totalPages || 1);
     }
+    setModalLoading(false);
   };
+
+  const openCustomerModal = () => {
+    setIsCustomerModalOpen(true);
+    fetchModalCustomers(1, modalSearch, modalStaffFilter, modalTagFilter);
+  };
+
+  // Debounced search trigger for server-side search across 12,000+ customers
+  useEffect(() => {
+    if (!isCustomerModalOpen) return;
+    const timer = setTimeout(() => {
+      fetchModalCustomers(1, modalSearch, modalStaffFilter, modalTagFilter);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [modalSearch, modalStaffFilter, modalTagFilter, isCustomerModalOpen]);
 
   const handleTemplateSelect = (tplId) => {
     setSelectedTemplateId(tplId);
@@ -127,6 +151,7 @@ function ComposeMailContent() {
   };
 
   const toggleSelectCustomer = (cust) => {
+    setSendToAllMatching(false);
     setSelectedCustomers(prev => {
       const exists = prev.some(c => c.id === cust.id);
       if (exists) return prev.filter(c => c.id !== cust.id);
@@ -135,6 +160,7 @@ function ComposeMailContent() {
   };
 
   const removeCustomer = (id) => {
+    setSendToAllMatching(false);
     setSelectedCustomers(prev => prev.filter(c => c.id !== id));
   };
 
@@ -179,7 +205,7 @@ function ComposeMailContent() {
 
   const handleSendMail = async (e) => {
     e.preventDefault();
-    if (selectedCustomers.length === 0 && !customEmails.trim()) {
+    if (!sendToAllMatching && selectedCustomers.length === 0 && !customEmails.trim()) {
       alert('Please select at least one customer or enter custom recipient emails.');
       return;
     }
@@ -196,15 +222,30 @@ function ComposeMailContent() {
       .map(e => e.trim())
       .filter(e => e.length > 0);
 
+    const payload = {
+      templateId: selectedTemplateId ? parseInt(selectedTemplateId) : null,
+      subject,
+      body_html: bodyHtml,
+      customEmails: parsedCustomEmails
+    };
+
+    if (sendToAllMatching) {
+      if (!modalSearch && modalStaffFilter === 'all' && modalTagFilter === 'all') {
+        payload.sendToAll = true;
+      } else {
+        payload.filterCriteria = {
+          search: modalSearch,
+          staff_code: modalStaffFilter,
+          tag1: modalTagFilter
+        };
+      }
+    } else {
+      payload.customerIds = selectedCustomers.map(c => c.id);
+    }
+
     const res = await fetchApi('/mail/send', {
       method: 'POST',
-      body: JSON.stringify({
-        customerIds: selectedCustomers.map(c => c.id),
-        customEmails: parsedCustomEmails,
-        templateId: selectedTemplateId ? parseInt(selectedTemplateId) : null,
-        subject,
-        body_html: bodyHtml
-      })
+      body: JSON.stringify(payload)
     });
 
     setSending(false);
@@ -222,31 +263,9 @@ function ComposeMailContent() {
     }
   };
 
-  // Filter Customers inside Modal
-  const filteredCustomersModal = allCustomers.filter(c => {
-    const term = modalSearch.toLowerCase();
-    const matchesSearch = !term || (
-      (c.name && c.name.toLowerCase().includes(term)) ||
-      (c.email && c.email.toLowerCase().includes(term)) ||
-      (c.city && c.city.toLowerCase().includes(term)) ||
-      (c.institute && c.institute.toLowerCase().includes(term)) ||
-      (c.created_by_code && c.created_by_code.toLowerCase().includes(term)) ||
-      (c.tag1 && c.tag1.toLowerCase().includes(term)) ||
-      (c.tag2 && c.tag2.toLowerCase().includes(term))
-    );
-
-    const matchesStaff = modalStaffFilter === 'all' || (c.created_by_code && c.created_by_code === modalStaffFilter);
-    const matchesTag = modalTagFilter === 'all' || (c.tag1 === modalTagFilter || c.tag2 === modalTagFilter);
-
-    return matchesSearch && matchesStaff && matchesTag;
-  });
-
-  // Extract unique staff codes and tags for filters
-  const uniqueStaffCodes = Array.from(new Set(allCustomers.map(c => c.created_by_code).filter(Boolean)));
-  const uniqueTags = Array.from(new Set(allCustomers.flatMap(c => [c.tag1, c.tag2]).filter(Boolean)));
-
-  const selectAllFilteredModal = () => {
-    const newItems = filteredCustomersModal.filter(c => c.email);
+  const selectPageItemsModal = () => {
+    setSendToAllMatching(false);
+    const newItems = allCustomers.filter(c => c.email);
     setSelectedCustomers(prev => {
       const merged = [...prev];
       newItems.forEach(item => {
@@ -256,7 +275,17 @@ function ComposeMailContent() {
     });
   };
 
+  const selectAllMatchingInCRM = () => {
+    setSendToAllMatching(true);
+    setMatchingCriteria({
+      search: modalSearch,
+      staff_code: modalStaffFilter,
+      tag1: modalTagFilter
+    });
+  };
+
   const deselectAllModal = () => {
+    setSendToAllMatching(false);
     setSelectedCustomers([]);
   };
 
@@ -273,7 +302,7 @@ function ComposeMailContent() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Compose & Send Email</h1>
-          <p className="text-sm text-slate-500 mt-1">Send non-blocking bulk or individual emails to customers via BullMQ & GMass.</p>
+          <p className="text-sm text-slate-500 mt-1">Send non-blocking bulk or individual emails to customers via BullMQ & Nodemailer.</p>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -568,54 +597,51 @@ function ComposeMailContent() {
             {/* Modal Controls & Filters */}
             <div className="p-4 bg-white border-b border-slate-200 space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="relative">
+                <div className="relative sm:col-span-2">
                   <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                   <input
                     type="text"
-                    placeholder="Search name, email, institute, city..."
+                    placeholder="Search name, email, institute, city, staff code across all 12,000+ records..."
                     value={modalSearch}
                     onChange={e => setModalSearch(e.target.value)}
-                    className="w-full pl-9 pr-3 py-1.5 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500"
+                    className="w-full pl-9 pr-3 py-1.5 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 font-medium"
                   />
                 </div>
 
                 <div>
-                  <select
-                    value={modalStaffFilter}
-                    onChange={e => setModalStaffFilter(e.target.value)}
-                    className="w-full border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-medium text-slate-700 bg-white"
-                  >
-                    <option value="all">Filter by Staff Code (All)</option>
-                    {uniqueStaffCodes.map(sc => (
-                      <option key={sc} value={sc}>Staff Code: {sc}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <select
-                    value={modalTagFilter}
-                    onChange={e => setModalTagFilter(e.target.value)}
-                    className="w-full border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-medium text-slate-700 bg-white"
-                  >
-                    <option value="all">Filter by Tag (All)</option>
-                    {uniqueTags.map(t => (
-                      <option key={t} value={t}>Tag: {t}</option>
-                    ))}
-                  </select>
+                  <input
+                    type="text"
+                    placeholder="Filter by Staff Code (e.g. ST01)..."
+                    value={modalStaffFilter === 'all' ? '' : modalStaffFilter}
+                    onChange={e => setModalStaffFilter(e.target.value.trim() || 'all')}
+                    className="w-full border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-mono text-slate-700 bg-white"
+                  />
                 </div>
               </div>
 
-              {/* Action Toolbar */}
+              {/* Action & Pagination Toolbar */}
               <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                <div className="flex items-center space-x-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
-                    onClick={selectAllFilteredModal}
+                    onClick={selectPageItemsModal}
                     className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl font-bold text-xs transition-colors flex items-center"
                   >
-                    <CheckSquare className="w-3.5 h-3.5 mr-1" /> Select All Filtered ({filteredCustomersModal.filter(c => c.email).length})
+                    <CheckSquare className="w-3.5 h-3.5 mr-1" /> Select Page ({allCustomers.filter(c => c.email).length})
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={selectAllMatchingInCRM}
+                    className={`px-3 py-1.5 rounded-xl font-bold text-xs transition-colors flex items-center ${
+                      sendToAllMatching 
+                        ? 'bg-emerald-600 text-white shadow-xs' 
+                        : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200'
+                    }`}
+                  >
+                    <Users className="w-3.5 h-3.5 mr-1" /> Target ALL {modalTotal.toLocaleString()} Matching in CRM
+                  </button>
+
                   <button
                     type="button"
                     onClick={deselectAllModal}
@@ -625,8 +651,41 @@ function ComposeMailContent() {
                   </button>
                 </div>
 
-                <div className="text-xs font-bold text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-xl border border-indigo-100">
-                  Selected: {selectedCustomers.length} Customer(s)
+                {/* Server Pagination Bar */}
+                <div className="flex items-center space-x-3 text-xs">
+                  <span className="text-slate-500 font-medium">
+                    {modalTotal > 0 ? (
+                      <>Showing <strong>{((modalPage - 1) * 50) + 1}</strong>-<strong>{Math.min(modalPage * 50, modalTotal)}</strong> of <strong>{modalTotal.toLocaleString()}</strong></>
+                    ) : '0 matching'}
+                  </span>
+
+                  {modalTotalPages > 1 && (
+                    <div className="flex items-center space-x-1">
+                      <button
+                        type="button"
+                        onClick={() => fetchModalCustomers(modalPage - 1)}
+                        disabled={modalPage === 1 || modalLoading}
+                        className="p-1 bg-slate-100 rounded-lg hover:bg-slate-200 disabled:opacity-40"
+                      >
+                        <ChevronLeft className="w-4 h-4 text-slate-600" />
+                      </button>
+                      <span className="font-bold text-slate-700 px-1">{modalPage}/{modalTotalPages}</span>
+                      <button
+                        type="button"
+                        onClick={() => fetchModalCustomers(modalPage + 1)}
+                        disabled={modalPage === modalTotalPages || modalLoading}
+                        className="p-1 bg-slate-100 rounded-lg hover:bg-slate-200 disabled:opacity-40"
+                      >
+                        <ChevronRight className="w-4 h-4 text-slate-600" />
+                      </button>
+                    </div>
+                  )}
+
+                  <div className={`px-3 py-1 rounded-xl text-xs font-bold ${
+                    sendToAllMatching ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' : 'bg-indigo-50 text-indigo-700 border border-indigo-100'
+                  }`}>
+                    {sendToAllMatching ? `Targeting ALL ${modalTotal.toLocaleString()} Customers` : `Selected: ${selectedCustomers.length}`}
+                  </div>
                 </div>
               </div>
             </div>
@@ -637,14 +696,14 @@ function ComposeMailContent() {
                 <div className="h-64 flex items-center justify-center">
                   <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
                 </div>
-              ) : filteredCustomersModal.length === 0 ? (
+              ) : allCustomers.length === 0 ? (
                 <div className="text-center py-16 text-slate-400 text-xs">
-                  No customers found matching search criteria.
+                  No customers found matching search criteria in your CRM database.
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {filteredCustomersModal.map(cust => {
-                    const isSelected = selectedCustomers.some(sc => sc.id === cust.id);
+                  {allCustomers.map(cust => {
+                    const isSelected = sendToAllMatching || selectedCustomers.some(sc => sc.id === cust.id);
                     const hasEmail = Boolean(cust.email);
 
                     return (
