@@ -166,7 +166,9 @@ export default function TemplatesPage() {
     setMsg91LiveLoading(true);
     const res = await fetchApi('/mail/templates/msg91-live');
     setMsg91LiveLoading(false);
-    if (res.success && Array.isArray(res.data)) {
+    if (res.success && Array.isArray(res.data?.templates)) {
+      setMsg91LiveTemplates(res.data.templates);
+    } else if (res.success && Array.isArray(res.data)) {
       setMsg91LiveTemplates(res.data);
     } else if (res.data?.data && Array.isArray(res.data.data)) {
       setMsg91LiveTemplates(res.data.data);

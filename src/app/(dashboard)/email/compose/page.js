@@ -500,11 +500,11 @@ function ComposeMailContent() {
               >
                 {sending ? (
                   <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Enqueueing Jobs...
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Sending Emails...
                   </>
                 ) : (
                   <>
-                    <Send className="w-4 h-4 mr-2" /> DISPATCH MAILS VIA BULLMQ
+                    <Send className="w-4 h-4 mr-2" /> SEND EMAIL DISPATCH
                   </>
                 )}
               </button>
