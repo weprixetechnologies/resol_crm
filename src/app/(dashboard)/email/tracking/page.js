@@ -21,6 +21,10 @@ export default function EmailTrackingDashboard() {
   const [eventSearch, setEventSearch] = useState('');
   const [eventTypeFilter, setEventTypeFilter] = useState('all');
 
+  // MSG91 Analytics State
+  const [msg91Analytics, setMsg91Analytics] = useState(null);
+  const [msg91Loading, setMsg91Loading] = useState(false);
+
   const loadData = async () => {
     setLoading(true);
     const [sumRes, campRes] = await Promise.all([
@@ -32,6 +36,15 @@ export default function EmailTrackingDashboard() {
     if (campRes.success) setCampaigns(campRes.data.items || []);
 
     setLoading(false);
+  };
+
+  const loadMsg91Analytics = async () => {
+    setMsg91Loading(true);
+    const res = await fetchApi('/mail/msg91-analytics');
+    setMsg91Loading(false);
+    if (res.success) {
+      setMsg91Analytics(res.data);
+    }
   };
 
   useEffect(() => {
@@ -233,6 +246,15 @@ export default function EmailTrackingDashboard() {
         </button>
 
         <button
+          onClick={() => setActiveTab('campaigns')}
+          className={`pb-3 text-sm font-semibold transition-colors border-b-2 ${
+            activeTab === 'campaigns' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          Campaign Tracking Table ({campaigns.length})
+        </button>
+
+        <button
           onClick={() => setActiveTab('events')}
           className={`pb-3 text-sm font-semibold transition-colors border-b-2 ${
             activeTab === 'events' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-900'
@@ -240,7 +262,74 @@ export default function EmailTrackingDashboard() {
         >
           Live Event Feed ({recentEvents.length})
         </button>
+
+        <button
+          onClick={() => { setActiveTab('msg91'); loadMsg91Analytics(); }}
+          className={`pb-3 text-sm font-semibold transition-colors border-b-2 flex items-center ${
+            activeTab === 'msg91' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          ⚡ MSG91 Live Analytics API
+        </button>
       </div>
+
+      {/* Tab 3: MSG91 Live Analytics API Panel */}
+      {activeTab === 'msg91' && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between bg-slate-900 text-white p-4 rounded-2xl shadow-md">
+            <div>
+              <h3 className="font-bold text-base">MSG91 Live Email Analytics</h3>
+              <p className="text-xs text-slate-300">Live delivery metrics directly from MSG91 Cloud Infrastructure</p>
+            </div>
+            <button
+              onClick={loadMsg91Analytics}
+              className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-colors flex items-center"
+            >
+              <Zap className="w-3.5 h-3.5 mr-1" /> Refresh Analytics
+            </button>
+          </div>
+
+          {msg91Loading ? (
+            <div className="flex justify-center items-center h-48">
+              <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-1">MSG91 Total Sent</span>
+                <span className="text-3xl font-extrabold text-slate-900">
+                  {msg91Analytics?.total_sent || msg91Analytics?.sent || msg91Analytics?.total || kpis.totalSent || 0}
+                </span>
+                <p className="text-[11px] text-slate-400 mt-1">Dispatched via MSG91 API</p>
+              </div>
+
+              <div className="bg-white p-5 rounded-2xl border border-emerald-200 shadow-xs bg-emerald-50/20">
+                <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 block mb-1">MSG91 Delivered</span>
+                <span className="text-3xl font-extrabold text-emerald-800">
+                  {msg91Analytics?.delivered || msg91Analytics?.total_delivered || 0}
+                </span>
+                <p className="text-[11px] text-emerald-600 mt-1">Successfully delivered</p>
+              </div>
+
+              <div className="bg-white p-5 rounded-2xl border border-indigo-200 shadow-xs bg-indigo-50/20">
+                <span className="text-xs font-bold uppercase tracking-wider text-indigo-700 block mb-1">MSG91 Opened</span>
+                <span className="text-3xl font-extrabold text-indigo-800">
+                  {msg91Analytics?.opened || msg91Analytics?.total_opened || 0}
+                </span>
+                <p className="text-[11px] text-indigo-600 mt-1">Verified opens</p>
+              </div>
+
+              <div className="bg-white p-5 rounded-2xl border border-rose-200 shadow-xs bg-rose-50/20">
+                <span className="text-xs font-bold uppercase tracking-wider text-rose-700 block mb-1">MSG91 Bounced / Failed</span>
+                <span className="text-3xl font-extrabold text-rose-800">
+                  {msg91Analytics?.failed || msg91Analytics?.bounced || msg91Analytics?.total_failed || 0}
+                </span>
+                <p className="text-[11px] text-rose-600 mt-1">Hard & Soft Bounces</p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Tab 1: Campaigns Performance Table */}
       {activeTab === 'campaigns' && (

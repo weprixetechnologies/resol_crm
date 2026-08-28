@@ -1184,9 +1184,9 @@ export default function TemplatesPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200">
-                      {templates.map(tpl => {
+                      {(msg91LiveTemplates.length > 0 ? msg91LiveTemplates : templates).map(tpl => {
                         const slug = tpl.msg91_slug || tpl.msg91_template_id;
-                        const isSynced = Boolean(slug);
+                        const liveStatus = tpl.liveStatus || (slug ? 'pending' : 'not_uploaded');
                         const isSyncing = syncingId === tpl.id;
                         return (
                           <tr key={tpl.id} className="hover:bg-slate-50 transition-colors">
@@ -1201,13 +1201,21 @@ export default function TemplatesPage() {
                               )}
                             </td>
                             <td className="p-3">
-                              {isSynced ? (
+                              {liveStatus === 'approved' ? (
                                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                                  ✓ Approved & Registered
+                                  ✓ Approved & Active
+                                </span>
+                              ) : liveStatus === 'pending' ? (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                  ⏳ Pending MSG91 Approval
+                                </span>
+                              ) : liveStatus === 'rejected' ? (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                                  ❌ Rejected by MSG91
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                                  ⚠️ Pending Sync
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                                  ⚠️ Not Uploaded
                                 </span>
                               )}
                             </td>
@@ -1216,10 +1224,10 @@ export default function TemplatesPage() {
                                 type="button"
                                 onClick={() => handleSyncTemplate(tpl.id)}
                                 disabled={isSyncing}
-                                className="inline-flex items-center px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg transition-colors disabled:opacity-50"
+                                className="inline-flex items-center px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg transition-colors disabled:opacity-50 text-xs"
                               >
                                 {isSyncing ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3 mr-1" />}
-                                {isSynced ? 'Re-Sync' : 'Sync Now'}
+                                {slug ? 'Check Live Status' : 'Upload to MSG91'}
                               </button>
                             </td>
                           </tr>

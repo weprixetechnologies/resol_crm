@@ -22,6 +22,11 @@ export default function EmailLogsPage() {
   // Detail Modal State
   const [selectedLog, setSelectedLog] = useState(null);
 
+  // Log Source State
+  const [logSource, setLogSource] = useState('crm'); // 'crm' | 'msg91'
+  const [msg91Logs, setMsg91Logs] = useState([]);
+  const [msg91Loading, setMsg91Loading] = useState(false);
+
   const loadLogs = async () => {
     setLoading(true);
     const res = await fetchApi(`/mail/logs?page=${page}&limit=20&search=${encodeURIComponent(search)}`);
@@ -31,6 +36,19 @@ export default function EmailLogsPage() {
       setTotalPages(res.data.totalPages);
     }
     setLoading(false);
+  };
+
+  const loadMsg91Logs = async () => {
+    setMsg91Loading(true);
+    const res = await fetchApi('/mail/msg91-logs');
+    setMsg91Loading(false);
+    if (res.success && Array.isArray(res.data)) {
+      setMsg91Logs(res.data);
+    } else if (res.data?.logs && Array.isArray(res.data.logs)) {
+      setMsg91Logs(res.data.logs);
+    } else {
+      setMsg91Logs([]);
+    }
   };
 
   const loadQueueStatus = async () => {
@@ -47,15 +65,19 @@ export default function EmailLogsPage() {
   }, []);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setPage(1);
-      loadLogs();
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [search]);
+    if (logSource === 'crm') {
+      const timer = setTimeout(() => {
+        setPage(1);
+        loadLogs();
+      }, 400);
+      return () => clearTimeout(timer);
+    } else {
+      loadMsg91Logs();
+    }
+  }, [search, logSource]);
 
   useEffect(() => {
-    loadLogs();
+    if (logSource === 'crm') loadLogs();
   }, [page]);
 
   return (
@@ -63,7 +85,7 @@ export default function EmailLogsPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Email Delivery Logs</h1>
-          <p className="text-sm text-slate-500 mt-1">Audit log and status of all outgoing emails sent via Nodemailer.</p>
+          <p className="text-sm text-slate-500 mt-1">Audit log and delivery status of all outgoing emails.</p>
         </div>
         <div className="flex items-center gap-3">
           <Link
@@ -73,6 +95,27 @@ export default function EmailLogsPage() {
             <Send className="w-4 h-4 mr-2" /> Compose Email
           </Link>
         </div>
+      </div>
+
+      {/* Log Source Selector Tabs */}
+      <div className="flex items-center bg-slate-200/80 p-1.5 rounded-2xl w-fit space-x-1.5">
+        <button
+          onClick={() => setLogSource('crm')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            logSource === 'crm' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          📁 CRM Internal Audit Logs ({total})
+        </button>
+        <button
+          onClick={() => { setLogSource('msg91'); loadMsg91Logs(); }}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center ${
+            logSource === 'msg91' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <Check className="w-3.5 h-3.5 mr-1.5 text-emerald-600" />
+          ⚡ MSG91 Live API Logs
+        </button>
       </div>
       {/* BullMQ Background Worker Live Metrics Banner */}
       <div className="bg-slate-900 text-white p-5 rounded-2xl shadow-md border border-slate-800">
@@ -132,7 +175,55 @@ export default function EmailLogsPage() {
 
         {/* Logs Table */}
         <div className="overflow-x-auto min-h-[400px]">
-          {loading ? (
+          {logSource === 'msg91' ? (
+            msg91Loading ? (
+              <div className="flex justify-center items-center h-64">
+                <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
+              </div>
+            ) : msg91Logs.length === 0 ? (
+              <div className="text-center py-16 text-slate-500">
+                <History className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                <p className="font-medium text-slate-600">No MSG91 live API logs found.</p>
+                <p className="text-xs text-slate-400 mt-1">Dispatches sent via MSG91 will appear here live.</p>
+              </div>
+            ) : (
+              <table className="min-w-full divide-y divide-slate-200">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th scope="col" className="px-6 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Recipient Email</th>
+                    <th scope="col" className="px-6 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">MSG91 Status / Event</th>
+                    <th scope="col" className="px-6 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">CRQID / MSG ID</th>
+                    <th scope="col" className="px-6 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Dispatched Date</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-slate-100">
+                  {msg91Logs.map((mLog, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-slate-900 font-mono">
+                        {mLog.email || mLog.recipient || mLog.to || 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold uppercase ${
+                          (mLog.status || mLog.event)?.toLowerCase() === 'delivered' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' :
+                          (mLog.status || mLog.event)?.toLowerCase() === 'opened' ? 'bg-indigo-50 text-indigo-800 border border-indigo-200' :
+                          (mLog.status || mLog.event)?.toLowerCase() === 'clicked' ? 'bg-amber-50 text-amber-800 border border-amber-200' :
+                          (mLog.status || mLog.event)?.toLowerCase() === 'failed' ? 'bg-rose-50 text-rose-800 border border-rose-200' : 'bg-slate-100 text-slate-700'
+                        }`}>
+                          {mLog.status || mLog.event || 'Processed'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-600 font-mono">
+                        {mLog.crqid || mLog.msgId || mLog.id || '-'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-500">
+                        {mLog.date || mLog.created_at ? new Date(mLog.date || mLog.created_at).toLocaleString() : 'Recent'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )
+          ) : loading ? (
             <div className="flex justify-center items-center h-64">
               <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
             </div>
