@@ -118,6 +118,12 @@ export default function TemplatesPage() {
   const [activeTab, setActiveTab] = useState('visual'); // 'visual', 'code', 'preview'
   const [previewMode, setPreviewMode] = useState('desktop'); // 'desktop', 'mobile'
 
+  const [syncingId, setSyncingId] = useState(null);
+  const [syncingAll, setSyncingAll] = useState(false);
+  const [msg91LiveModal, setMsg91LiveModal] = useState(false);
+  const [msg91LiveTemplates, setMsg91LiveTemplates] = useState([]);
+  const [msg91LiveLoading, setMsg91LiveLoading] = useState(false);
+
   const loadTemplates = async () => {
     setLoading(true);
     const res = await fetchApi('/mail/templates');
@@ -130,6 +136,44 @@ export default function TemplatesPage() {
   useEffect(() => {
     loadTemplates();
   }, []);
+
+  const handleSyncTemplate = async (id) => {
+    setSyncingId(id);
+    const res = await fetchApi(`/mail/templates/${id}/sync-msg91`, { method: 'POST' });
+    setSyncingId(null);
+    if (res.success) {
+      alert(`Template #${id} successfully synced to MSG91!\nMSG91 Slug: "${res.data?.msg91_slug || res.data?.msg91_template_id}"`);
+      loadTemplates();
+    } else {
+      alert(`Sync failed: ${res.error?.message || 'Unknown error'}`);
+    }
+  };
+
+  const handleSyncAllTemplates = async () => {
+    setSyncingAll(true);
+    const res = await fetchApi('/mail/templates/sync-all-msg91', { method: 'POST' });
+    setSyncingAll(false);
+    if (res.success) {
+      alert(`Batch sync to MSG91 complete!\nSynced: ${Array.isArray(res.data) ? res.data.filter(r => r.status === 'synced').length : 0} templates.`);
+      loadTemplates();
+    } else {
+      alert(`Batch sync failed: ${res.error?.message || 'Unknown error'}`);
+    }
+  };
+
+  const openMsg91LiveModal = async () => {
+    setMsg91LiveModal(true);
+    setMsg91LiveLoading(true);
+    const res = await fetchApi('/mail/templates/msg91-live');
+    setMsg91LiveLoading(false);
+    if (res.success && Array.isArray(res.data)) {
+      setMsg91LiveTemplates(res.data);
+    } else if (res.data?.data && Array.isArray(res.data.data)) {
+      setMsg91LiveTemplates(res.data.data);
+    } else {
+      setMsg91LiveTemplates([]);
+    }
+  };
 
   const compileBlocksToHtml = (blocksArr) => {
     if (!blocksArr || blocksArr.length === 0) return '';
@@ -382,7 +426,22 @@ export default function TemplatesPage() {
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Email Templates</h1>
           <p className="text-sm text-slate-500 mt-1">Design customized Drag-and-Drop React Email templates for customer communication.</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={openMsg91LiveModal}
+            className="inline-flex items-center px-3.5 py-2 bg-slate-100 text-slate-700 font-semibold text-xs rounded-xl hover:bg-slate-200 border border-slate-200 transition-colors"
+          >
+            <Check className="w-3.5 h-3.5 mr-1.5 text-emerald-600" />
+            MSG91 Mapping & Approval Status
+          </button>
+          <button
+            onClick={handleSyncAllTemplates}
+            disabled={syncingAll}
+            className="inline-flex items-center px-3.5 py-2 bg-emerald-600 text-white font-semibold text-xs rounded-xl hover:bg-emerald-700 shadow-sm transition-colors disabled:opacity-50"
+          >
+            {syncingAll ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 mr-1.5" />}
+            Sync All to MSG91
+          </button>
           <button
             onClick={() => openNewEditor()}
             className="inline-flex items-center px-4 py-2.5 bg-indigo-600 text-white font-medium text-sm rounded-xl hover:bg-indigo-700 shadow-sm transition-colors"
@@ -418,7 +477,10 @@ export default function TemplatesPage() {
 
       {/* Template Grid List */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-        <h2 className="text-lg font-semibold text-slate-900 mb-4">Saved Templates ({templates.length})</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-slate-900">Saved Templates ({templates.length})</h2>
+          <span className="text-xs text-slate-500">Synced templates use registered MSG91 slugs automatically</span>
+        </div>
 
         {loading ? (
           <div className="flex justify-center items-center h-48">
@@ -438,49 +500,77 @@ export default function TemplatesPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {templates.map(tpl => (
-              <div key={tpl.id} className="border border-slate-200 rounded-2xl p-5 hover:border-indigo-300 transition-all shadow-xs flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
-                      ID #{tpl.id}
-                    </span>
-                    <span className="text-[11px] text-slate-400">
-                      {new Date(tpl.updated_at).toLocaleDateString()}
-                    </span>
-                  </div>
-                  <h3 className="font-bold text-slate-900 text-base mb-1 line-clamp-1">{tpl.name}</h3>
-                  <p className="text-xs text-slate-500 font-medium mb-3 line-clamp-1">Subject: {tpl.subject}</p>
-                  <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 h-28 overflow-hidden text-[11px] text-slate-600 font-mono mb-4 relative">
-                    <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-slate-50 opacity-90 pointer-events-none"></div>
-                    {tpl.body_html.replace(/<[^>]*>?/gm, '')}
-                  </div>
-                </div>
+            {templates.map(tpl => {
+              const msg91Slug = tpl.msg91_slug || tpl.msg91_template_id;
+              const isSyncing = syncingId === tpl.id;
+              return (
+                <div key={tpl.id} className="border border-slate-200 rounded-2xl p-5 hover:border-indigo-300 transition-all shadow-xs flex flex-col justify-between bg-white">
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
+                        ID #{tpl.id}
+                      </span>
+                      <span className="text-[11px] text-slate-400">
+                        {new Date(tpl.updated_at).toLocaleDateString()}
+                      </span>
+                    </div>
 
-                <div className="flex items-center justify-between pt-3 border-t border-slate-100 gap-2">
-                  <Link
-                    href={`/email/compose?templateId=${tpl.id}`}
-                    className="inline-flex items-center px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs rounded-lg transition-colors flex-1 justify-center"
-                  >
-                    <Send className="w-3.5 h-3.5 mr-1" /> Use in Compose
-                  </Link>
-                  <button
-                    onClick={() => openEditEditor(tpl)}
-                    className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition-colors"
-                    title="Edit Template"
-                  >
-                    <Edit className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(tpl.id)}
-                    className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                    title="Delete Template"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                    <h3 className="font-bold text-slate-900 text-base mb-1 line-clamp-1">{tpl.name}</h3>
+                    <p className="text-xs text-slate-500 font-medium mb-2.5 line-clamp-1">Subject: {tpl.subject}</p>
+
+                    {/* MSG91 Mapping Status Badge */}
+                    <div className="mb-3">
+                      {msg91Slug ? (
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          <Check className="w-3 h-3 mr-1" /> MSG91 Slug: {msg91Slug}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                          ⚠️ Not Synced to MSG91
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 h-24 overflow-hidden text-[11px] text-slate-600 font-mono mb-4 relative">
+                      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-slate-50 opacity-90 pointer-events-none"></div>
+                      {tpl.body_html.replace(/<[^>]*>?/gm, '')}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-3 border-t border-slate-100 gap-2">
+                    <button
+                      onClick={() => handleSyncTemplate(tpl.id)}
+                      disabled={isSyncing}
+                      className="inline-flex items-center px-2.5 py-1.5 bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 border border-slate-200 hover:border-emerald-200 font-semibold text-xs rounded-lg transition-colors disabled:opacity-50"
+                      title="Push/Sync Template to MSG91"
+                    >
+                      {isSyncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 mr-1" />}
+                      {msg91Slug ? 'Re-Sync' : 'Sync MSG91'}
+                    </button>
+                    <Link
+                      href={`/email/compose?templateId=${tpl.id}`}
+                      className="inline-flex items-center px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs rounded-lg transition-colors flex-1 justify-center"
+                    >
+                      <Send className="w-3.5 h-3.5 mr-1" /> Compose
+                    </Link>
+                    <button
+                      onClick={() => openEditEditor(tpl)}
+                      className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition-colors"
+                      title="Edit Template"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(tpl.id)}
+                      className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                      title="Delete Template"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -1032,6 +1122,123 @@ export default function TemplatesPage() {
               >
                 {saving ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Check className="w-4 h-4 mr-1.5" />}
                 Save Template
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MSG91 Template Mapping & Live Approval Status Modal */}
+      {msg91LiveModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-900 text-white">
+              <div className="flex items-center space-x-3">
+                <div className="w-9 h-9 bg-emerald-500 text-slate-900 rounded-xl flex items-center justify-center font-bold">
+                  <Check className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg">MSG91 Template Mapping & Approval Status</h3>
+                  <p className="text-xs text-slate-300">Live verification of CRM templates against MSG91 API</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMsg91LiveModal(false)}
+                className="text-slate-400 hover:text-white text-sm font-bold px-2 py-1 rounded-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Content Table */}
+            <div className="p-6 overflow-y-auto flex-1 space-y-4">
+              <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs">
+                <span className="text-slate-600 font-medium">Total Saved Templates: <strong>{templates.length}</strong></span>
+                <button
+                  type="button"
+                  onClick={openMsg91LiveModal}
+                  className="inline-flex items-center px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 mr-1" /> Refresh Live Status
+                </button>
+              </div>
+
+              {msg91LiveLoading ? (
+                <div className="flex justify-center items-center h-36">
+                  <Loader2 className="w-7 h-7 text-indigo-600 animate-spin" />
+                </div>
+              ) : (
+                <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-100 border-b border-slate-200 text-slate-700 font-bold uppercase tracking-wider">
+                      <tr>
+                        <th className="p-3">CRM ID</th>
+                        <th className="p-3">Template Name</th>
+                        <th className="p-3">Email Subject</th>
+                        <th className="p-3">MSG91 Slug / ID</th>
+                        <th className="p-3">MSG91 Status</th>
+                        <th className="p-3 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {templates.map(tpl => {
+                        const slug = tpl.msg91_slug || tpl.msg91_template_id;
+                        const isSynced = Boolean(slug);
+                        const isSyncing = syncingId === tpl.id;
+                        return (
+                          <tr key={tpl.id} className="hover:bg-slate-50 transition-colors">
+                            <td className="p-3 font-mono font-bold text-indigo-700">#{tpl.id}</td>
+                            <td className="p-3 font-semibold text-slate-900">{tpl.name}</td>
+                            <td className="p-3 text-slate-500 max-w-[200px] truncate">{tpl.subject}</td>
+                            <td className="p-3 font-mono text-slate-700">
+                              {slug ? (
+                                <span className="bg-slate-100 text-slate-800 px-2 py-0.5 rounded font-bold">{slug}</span>
+                              ) : (
+                                <span className="text-slate-400 italic">Not Assigned</span>
+                              )}
+                            </td>
+                            <td className="p-3">
+                              {isSynced ? (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                  ✓ Approved & Registered
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                  ⚠️ Pending Sync
+                                </span>
+                              )}
+                            </td>
+                            <td className="p-3 text-right">
+                              <button
+                                type="button"
+                                onClick={() => handleSyncTemplate(tpl.id)}
+                                disabled={isSyncing}
+                                className="inline-flex items-center px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg transition-colors disabled:opacity-50"
+                              >
+                                {isSyncing ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3 mr-1" />}
+                                {isSynced ? 'Re-Sync' : 'Sync Now'}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-3 border-t border-slate-200 bg-slate-50 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setMsg91LiveModal(false)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold rounded-xl"
+              >
+                Close Window
               </button>
             </div>
           </div>
