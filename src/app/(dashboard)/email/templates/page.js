@@ -1188,37 +1188,70 @@ export default function TemplatesPage() {
                     <tbody className="divide-y divide-slate-200">
                       {(msg91LiveTemplates.length > 0 ? msg91LiveTemplates : templates).map(tpl => {
                         const slug = tpl.msg91_slug || tpl.msg91_template_id;
-                        const liveStatus = tpl.liveStatus || (slug ? 'pending' : 'not_uploaded');
+                        const status = (tpl.msg91_status || tpl.liveStatus || (slug ? 'ACTIVE' : 'NOT_UPLOADED')).toUpperCase();
+                        const statusId = tpl.msg91_status_id;
+                        const versionId = tpl.msg91_version_id;
+                        const reasonId = tpl.reason_id;
                         const isSyncing = syncingId === tpl.id;
+
                         return (
                           <tr key={tpl.id} className="hover:bg-slate-50 transition-colors">
                             <td className="p-3 font-mono font-bold text-indigo-700">#{tpl.id}</td>
-                            <td className="p-3 font-semibold text-slate-900">{tpl.name}</td>
-                            <td className="p-3 text-slate-500 max-w-[200px] truncate">{tpl.subject}</td>
+                            <td className="p-3">
+                              <div className="font-semibold text-slate-900">{tpl.name}</div>
+                              {versionId && <div className="text-[10px] text-slate-400 font-mono">Version: {versionId}</div>}
+                            </td>
+                            <td className="p-3 text-slate-500 max-w-[180px] truncate">{tpl.subject}</td>
                             <td className="p-3 font-mono text-slate-700">
                               {slug ? (
-                                <span className="bg-slate-100 text-slate-800 px-2 py-0.5 rounded font-bold">{slug}</span>
+                                <div>
+                                  <span className="bg-slate-100 text-slate-800 px-2 py-0.5 rounded font-bold text-xs">{slug}</span>
+                                  {tpl.msg91_template_id && (
+                                    <div className="text-[10px] text-slate-400 mt-0.5">ID: {String(tpl.msg91_template_id)}</div>
+                                  )}
+                                </div>
                               ) : (
                                 <span className="text-slate-400 italic">Not Assigned</span>
                               )}
                             </td>
                             <td className="p-3">
-                              {liveStatus === 'approved' ? (
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                                  ✓ Approved & Active
-                                </span>
-                              ) : liveStatus === 'pending' ? (
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                                  ⏳ Pending MSG91 Approval
-                                </span>
-                              ) : liveStatus === 'rejected' ? (
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
-                                  ❌ Rejected by MSG91
-                                </span>
+                              {status === 'ACTIVE' || status === 'APPROVED' ? (
+                                <div>
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                    ACTIVE ✓
+                                  </span>
+                                </div>
+                              ) : status === 'PENDING' ? (
+                                <div>
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                    PENDING ⏳
+                                  </span>
+                                  <p className="text-[10px] text-amber-700 mt-0.5">Cannot send until approved.</p>
+                                </div>
+                              ) : status === 'REJECTED' ? (
+                                <div>
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                                    REJECTED ❌
+                                  </span>
+                                  {reasonId && <p className="text-[10px] text-rose-700 mt-0.5">Reason: {reasonId}</p>}
+                                </div>
+                              ) : status === 'DRAFT' ? (
+                                <div>
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
+                                    DRAFT 📝
+                                  </span>
+                                  <p className="text-[10px] text-slate-500 mt-0.5">Draft mode.</p>
+                                </div>
                               ) : (
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                                  ⚠️ Not Uploaded
-                                </span>
+                                <div>
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                                    UNKNOWN
+                                  </span>
+                                  {statusId !== undefined && statusId !== null && (
+                                    <p className="text-[10px] text-purple-700 mt-0.5">MSG91 Status ID: {statusId}</p>
+                                  )}
+                                  <p className="text-[9px] text-slate-400 mt-0.5">Unable to determine approval state.</p>
+                                </div>
                               )}
                             </td>
                             <td className="p-3 text-right">
@@ -1229,7 +1262,7 @@ export default function TemplatesPage() {
                                 className="inline-flex items-center px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg transition-colors disabled:opacity-50 text-xs"
                               >
                                 {isSyncing ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3 mr-1" />}
-                                {slug ? 'Check Live Status' : 'Upload to MSG91'}
+                                {slug ? 'Sync MSG91 Status' : 'Upload to MSG91'}
                               </button>
                             </td>
                           </tr>
