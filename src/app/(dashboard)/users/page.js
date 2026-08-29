@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { fetchApi, api } from '@/lib/api';
 import Link from 'next/link';
-import { Search, Plus, ChevronLeft, ChevronRight, Loader2, UserPlus, Eye, AlertTriangle, Filter, X, Download, Trash2, Mail, Calendar } from 'lucide-react';
+import { Search, Plus, ChevronLeft, ChevronRight, Loader2, UserPlus, Eye, AlertTriangle, Filter, X, Download, Trash2, Mail, Calendar, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 export default function UsersPage() {
@@ -14,6 +14,8 @@ export default function UsersPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [search, setSearch] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [isSyncPending, setIsSyncPending] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [advancedFilters, setAdvancedFilters] = useState({
     city: '', state: '', country: '', institute: '', department: '', designation: '', 
     source: 'all', status: 'all', tag1: '', tag2: '', staff_code: '',
@@ -86,8 +88,21 @@ export default function UsersPage() {
       setUsers(res.data.items);
       setTotal(res.data.total);
       setTotalPages(res.data.totalPages);
+      setIsSyncPending(!!res.data.isSyncPending);
     }
     setLoading(false);
+  };
+
+  const handleSyncSerialNumbers = async () => {
+    setSyncing(true);
+    const res = await fetchApi('/users/sync-serial', { method: 'POST' });
+    setSyncing(false);
+    if (res.success) {
+      setIsSyncPending(false);
+      loadUsers();
+    } else {
+      alert(res.error?.message || 'Failed to sync serial numbers');
+    }
   };
 
   useEffect(() => {
@@ -108,7 +123,7 @@ export default function UsersPage() {
     setUsers(users.map(u => u.id === userId ? { ...u, status: newStatus } : u));
 
     const res = await fetchApi(`/users/${userId}`, {
-      method: 'PUT',
+      method: 'PATCH',
       body: JSON.stringify({ status: newStatus })
     });
 
@@ -233,6 +248,21 @@ export default function UsersPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          {user?.role === 'admin' && (
+            <button
+              onClick={handleSyncSerialNumbers}
+              disabled={syncing}
+              className={`inline-flex items-center px-4 py-2.5 font-semibold text-sm rounded-xl transition-colors shadow-xs disabled:opacity-50 ${
+                isSyncPending
+                  ? 'bg-amber-500 text-white hover:bg-amber-600 animate-pulse'
+                  : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              {syncing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className={`w-4 h-4 mr-2 ${isSyncPending ? 'text-white' : 'text-amber-600'}`} />}
+              {syncing ? 'Syncing S.No...' : (isSyncPending ? 'Sync Serial (Pending)' : 'Sync Serial Numbers')}
+            </button>
+          )}
+
           <button
             onClick={handleExport}
             disabled={exporting}
@@ -250,6 +280,29 @@ export default function UsersPage() {
           </button>
         </div>
       </div>
+
+      {/* Serial Numbers Sync Pending Banner */}
+      {isSyncPending && (
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 bg-amber-100 text-amber-700 rounded-xl">
+              <RefreshCw className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-amber-900">Serial Numbers Sync Pending</h4>
+              <p className="text-xs text-amber-700 mt-0.5">Recent customer deletions occurred. Click to manually re-sequence S.No. without gaps.</p>
+            </div>
+          </div>
+          <button
+            onClick={handleSyncSerialNumbers}
+            disabled={syncing}
+            className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors disabled:opacity-50 flex items-center shrink-0"
+          >
+            {syncing ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-1.5" />}
+            {syncing ? 'Syncing S.No...' : 'Sync Serial Numbers Now'}
+          </button>
+        </div>
+      )}
 
       {/* Main Table Card */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
@@ -519,8 +572,7 @@ export default function UsersPage() {
                   </tr>
                 ) : (
                   users.map((u, idx) => {
-                    const maxSNo = advancedFilters.toSNo ? parseInt(advancedFilters.toSNo) : total;
-                    const rowSNo = maxSNo - ((page - 1) * 10 + idx);
+                    const rowSNo = u.sl_no || u.id;
                     return (
                       <tr key={u.id} className={`hover:bg-slate-50/80 transition-colors ${selectedUserIds.includes(u.id) ? 'bg-indigo-50/40' : ''}`}>
                         <td className="px-4 py-4 whitespace-nowrap text-center">
