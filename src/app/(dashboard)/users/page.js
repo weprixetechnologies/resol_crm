@@ -12,6 +12,7 @@ export default function UsersPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [limit, setLimit] = useState(10);
   const [search, setSearch] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [isSyncPending, setIsSyncPending] = useState(false);
@@ -74,7 +75,7 @@ export default function UsersPage() {
 
   const loadUsers = async () => {
     setLoading(true);
-    let url = `/users?page=${page}&limit=10&search=${encodeURIComponent(search)}`;
+    let url = `/users?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}`;
     
     // Append advanced filters
     Object.keys(advancedFilters).forEach(key => {
@@ -106,13 +107,13 @@ export default function UsersPage() {
   };
 
   useEffect(() => {
-    // Debounce search and filters
+    // Debounce search, filters, and limit
     const timer = setTimeout(() => {
       setPage(1);
       loadUsers();
-    }, 500);
+    }, 300);
     return () => clearTimeout(timer);
-  }, [search, advancedFilters]);
+  }, [search, advancedFilters, limit]);
 
   useEffect(() => {
     loadUsers();
@@ -673,10 +674,46 @@ export default function UsersPage() {
 
         {/* Pagination Bar */}
         <div className="p-4 border-t border-slate-200 bg-slate-50/50 flex flex-col sm:flex-row justify-between items-center gap-4">
-          <div className="text-sm text-slate-500">
-            Showing <span className="font-semibold text-slate-900">{total === 0 ? 0 : (page - 1) * 10 + 1}</span> to{' '}
-            <span className="font-semibold text-slate-900">{Math.min(page * 10, total)}</span> of{' '}
-            <span className="font-semibold text-slate-900">{total}</span> customers
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="text-sm text-slate-500">
+              Showing <span className="font-semibold text-slate-900">{total === 0 ? 0 : (page - 1) * limit + 1}</span> to{' '}
+              <span className="font-semibold text-slate-900">{Math.min(page * limit, total)}</span> of{' '}
+              <span className="font-semibold text-slate-900">{total}</span> customers
+            </div>
+
+            {/* Custom Rows Per Page Dropdown */}
+            <div className="flex items-center space-x-2 border-l border-slate-200 pl-4">
+              <span className="text-xs font-semibold text-slate-500">Rows per page:</span>
+              <select
+                value={[10, 20, 50, 100, 200, 500, 1000].includes(limit) ? limit : 'custom'}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === 'custom') {
+                    const input = prompt('Enter custom rows per page (1-5000):', limit);
+                    if (input) {
+                      const parsed = parseInt(input);
+                      if (!isNaN(parsed) && parsed > 0) {
+                        setLimit(Math.min(5000, parsed));
+                        setPage(1);
+                      }
+                    }
+                  } else {
+                    setLimit(parseInt(val));
+                    setPage(1);
+                  }
+                }}
+                className="px-2.5 py-1 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-500 focus:outline-none shadow-2xs"
+              >
+                <option value={10}>10 rows</option>
+                <option value={20}>20 rows</option>
+                <option value={50}>50 rows</option>
+                <option value={100}>100 rows</option>
+                <option value={200}>200 rows</option>
+                <option value={500}>500 rows</option>
+                <option value={1000}>1000 rows</option>
+                <option value="custom">Custom...</option>
+              </select>
+            </div>
           </div>
 
           <div className="flex items-center space-x-2">
