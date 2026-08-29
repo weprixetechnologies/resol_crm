@@ -519,7 +519,8 @@ export default function UsersPage() {
                   </tr>
                 ) : (
                   users.map((u, idx) => {
-                    const rowSNo = (page - 1) * 10 + baseSNo + idx;
+                    const maxSNo = advancedFilters.toSNo ? parseInt(advancedFilters.toSNo) : total;
+                    const rowSNo = maxSNo - ((page - 1) * 10 + idx);
                     return (
                       <tr key={u.id} className={`hover:bg-slate-50/80 transition-colors ${selectedUserIds.includes(u.id) ? 'bg-indigo-50/40' : ''}`}>
                         <td className="px-4 py-4 whitespace-nowrap text-center">

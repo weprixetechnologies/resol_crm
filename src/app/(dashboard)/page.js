@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { fetchApi } from '@/lib/api';
-import { Users, Shield, UserX, Archive, Loader2, UserPlus, Upload, Database, Activity, Clock } from 'lucide-react';
+import { Users, Shield, UserX, Archive, Loader2, UserPlus, Upload, Database, Activity, Clock, Filter } from 'lucide-react';
 import Link from 'next/link';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { format, parseISO } from 'date-fns';
@@ -16,11 +16,14 @@ export default function DashboardPage() {
   const [timeRange, setTimeRange] = useState('7d');
   const [contactValue, setContactValue] = useState(24);
   const [contactUnit, setContactUnit] = useState('hours');
+  const [staffCode, setStaffCode] = useState('');
 
   useEffect(() => {
     async function loadStats() {
       setLoading(true);
-      const res = await fetchApi(`/dashboard/stats?range=${timeRange}&contactValue=${contactValue}&contactUnit=${contactUnit}`);
+      const res = await fetchApi(
+        `/dashboard/stats?range=${timeRange}&contactValue=${contactValue}&contactUnit=${contactUnit}&staffCode=${encodeURIComponent(staffCode)}`
+      );
       if (res.success) {
         setStats(res.data);
       } else {
@@ -30,7 +33,7 @@ export default function DashboardPage() {
     }
     const timer = setTimeout(loadStats, 300);
     return () => clearTimeout(timer);
-  }, [timeRange, contactValue, contactUnit]);
+  }, [timeRange, contactValue, contactUnit, staffCode]);
 
   if (loading && !stats) {
     return (
@@ -186,6 +189,44 @@ export default function DashboardPage() {
                 <option value="days">Days</option>
               </select>
             </div>
+
+            {/* Quick Staff Code Filter */}
+            <div className="flex items-center space-x-1.5 bg-white border border-slate-200 rounded-xl px-3 py-1.5 shadow-xs focus-within:ring-2 focus-within:ring-indigo-500">
+              <Filter className="w-3.5 h-3.5 text-slate-400" />
+              <span className="text-xs font-semibold text-slate-500 hidden sm:inline">Staff Code:</span>
+              {stats?.contactsCreatedStats?.staffList && stats.contactsCreatedStats.staffList.length > 0 ? (
+                <select
+                  value={staffCode}
+                  onChange={(e) => setStaffCode(e.target.value)}
+                  className="text-xs font-semibold text-indigo-600 bg-transparent focus:outline-none cursor-pointer font-mono max-w-[120px] truncate"
+                >
+                  <option value="">All Staff</option>
+                  {stats.contactsCreatedStats.staffList.map((s) => (
+                    <option key={s.id} value={s.staff_code}>
+                      {s.staff_code} ({s.name})
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  placeholder="e.g. ST01"
+                  value={staffCode}
+                  onChange={(e) => setStaffCode(e.target.value)}
+                  className="w-16 text-xs font-bold font-mono text-indigo-600 focus:outline-none bg-transparent uppercase"
+                />
+              )}
+              {staffCode && (
+                <button
+                  type="button"
+                  onClick={() => setStaffCode('')}
+                  className="text-slate-400 hover:text-slate-600 text-xs font-bold px-0.5"
+                  title="Clear Staff Code Filter"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -194,6 +235,7 @@ export default function DashboardPage() {
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700">
                 Contacts Created in Last {contactValue} {contactUnit === 'hours' ? (contactValue === 1 ? 'Hour' : 'Hours') : (contactValue === 1 ? 'Day' : 'Days')}
+                {staffCode ? ` • Filtered by Staff Code: ${staffCode}` : ''}
               </p>
               <p className="text-3xl font-extrabold text-slate-900 mt-1">
                 {stats?.contactsCreatedStats?.total || 0}
