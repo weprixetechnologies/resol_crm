@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { fetchApi, api } from '@/lib/api';
 import Link from 'next/link';
-import { Search, Plus, ChevronLeft, ChevronRight, Loader2, UserPlus, Eye, AlertTriangle, Filter, X, Download, Trash2, Mail, Calendar, RefreshCw, CheckCircle2, AlertCircle, Check, ShieldAlert } from 'lucide-react';
+import { Search, Plus, ChevronLeft, ChevronRight, Loader2, UserPlus, Eye, AlertTriangle, Filter, X, Download, Trash2, Mail, Calendar, RefreshCw, CheckCircle2, AlertCircle, Check, ShieldAlert, Zap, Clock, Cpu } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 export default function UsersPage() {
@@ -72,6 +72,10 @@ export default function UsersPage() {
   const [validationMsg, setValidationMsg] = useState('');
   const [isBulkValidateModalOpen, setIsBulkValidateModalOpen] = useState(false);
 
+  // Execution Mode State (DO NOW vs BACKGROUND WORKER)
+  const [targetType, setTargetType] = useState('selected'); // 'selected', 'page', 'all'
+  const [progressState, setProgressState] = useState(null); // { current, total, currentEmail, deliverable, undeliverable, risky }
+
   // Modal State for New Customer Data
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newUserData, setNewUserData] = useState({ name: '', email: '', mobile: '', city: '', country: 'India', status: 'active', tag1: '', tag2: '' });
@@ -130,30 +134,106 @@ export default function UsersPage() {
     }
   };
 
-  const handleBulkValidateEmails = async (targetUserIds = null, validateAllUnvalidated = false) => {
-    const idsToValidate = targetUserIds || selectedUserIds;
-    if (!validateAllUnvalidated && idsToValidate.length === 0) return;
+  // Helper to determine target users list
+  const getTargetUserList = (type = targetType) => {
+    if (type === 'selected') return users.filter(u => selectedUserIds.includes(u.id));
+    if (type === 'page') return users.filter(u => u.email);
+    return []; // 'all' handled by backend query
+  };
 
-    setBulkValidating(true);
+  // Handle Mode 1: USE BACKGROUND WORKER
+  const handleRunBackgroundWorker = async (type = targetType) => {
+    const list = getTargetUserList(type);
+    const isAll = type === 'all';
+    const ids = isAll ? [] : list.map(u => u.id);
+
     setIsBulkValidateModalOpen(false);
+    setValidationMsg(`IT WILL BE VALIDATED SOON. Validation queued for ${isAll ? 'all unvalidated customer' : ids.length} email(s) in the background.`);
 
     const res = await fetchApi('/users/bulk-validate-email', {
       method: 'POST',
       body: JSON.stringify({
-        userIds: idsToValidate,
-        validateAllUnvalidated
+        userIds: ids,
+        validateAllUnvalidated: isAll,
+        mode: 'background'
       })
     });
 
-    setBulkValidating(false);
-
-    if (res.success) {
-      setValidationMsg(res.message || `Bulk Email Validation Complete: ${res.data?.totalValidated || idsToValidate.length} customer email(s) processed.`);
-      loadUsers();
-      setTimeout(() => setValidationMsg(''), 5000);
-    } else {
-      alert(res.error?.message || 'Bulk email validation failed');
+    if (!res.success) {
+      alert(res.error?.message || 'Failed to queue background validation');
     }
+  };
+
+  // Handle Mode 2: DO NOW (Real-time Step-by-Step Loop with Live Progress Bar)
+  const handleRunDoNowProgress = async (type = targetType) => {
+    const isAll = type === 'all';
+    let targetUsersList = [];
+
+    if (isAll) {
+      // Fetch unvalidated users
+      const res = await fetchApi('/users?limit=100&search=');
+      if (res.success) {
+        targetUsersList = res.data.items.filter(u => u.email && (!u.email_validation_status || u.email_validation_status === 'unknown'));
+      }
+    } else {
+      targetUsersList = getTargetUserList(type);
+    }
+
+    if (targetUsersList.length === 0) {
+      alert('No customer emails found matching criteria to validate.');
+      return;
+    }
+
+    setIsBulkValidateModalOpen(false);
+    setBulkValidating(true);
+
+    const totalCount = targetUsersList.length;
+    let deliverableCount = 0;
+    let undeliverableCount = 0;
+    let riskyCount = 0;
+
+    setProgressState({
+      current: 0,
+      total: totalCount,
+      currentEmail: targetUsersList[0].email,
+      deliverable: 0,
+      undeliverable: 0,
+      risky: 0
+    });
+
+    // Execute 1-by-1 in loop with UI update per step
+    for (let i = 0; i < totalCount; i++) {
+      const currentUser = targetUsersList[i];
+      setProgressState({
+        current: i + 1,
+        total: totalCount,
+        currentEmail: currentUser.email,
+        deliverable: deliverableCount,
+        undeliverable: undeliverableCount,
+        risky: riskyCount
+      });
+
+      const res = await fetchApi(`/users/${currentUser.id}/validate-email`, { method: 'POST' });
+      if (res.success && res.data?.validation) {
+        const valStatus = res.data.validation.resultStatus;
+        if (valStatus === 'deliverable') deliverableCount++;
+        else if (valStatus === 'undeliverable') undeliverableCount++;
+        else if (valStatus === 'risky') riskyCount++;
+
+        setUsers(prev => prev.map(u => u.id === currentUser.id ? {
+          ...u,
+          email_validation_status: valStatus,
+          email_validation_reason: res.data.validation.reason,
+          email_validated_at: new Date().toISOString()
+        } : u));
+      }
+    }
+
+    setBulkValidating(false);
+    setProgressState(null);
+    setValidationMsg(`Bulk Email Validation Complete! ${totalCount} email(s) validated: ${deliverableCount} Deliverable, ${undeliverableCount} Undeliverable.`);
+    loadUsers();
+    setTimeout(() => setValidationMsg(''), 6000);
   };
 
   useEffect(() => {
@@ -336,7 +416,7 @@ export default function UsersPage() {
 
         <div className="flex items-center space-x-3">
           <button
-            onClick={() => setIsBulkValidateModalOpen(true)}
+            onClick={() => { setTargetType(selectedUserIds.length > 0 ? 'selected' : 'page'); setIsBulkValidateModalOpen(true); }}
             disabled={bulkValidating}
             className="inline-flex items-center px-4 py-2 border border-indigo-200 shadow-xs text-xs font-bold rounded-xl text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors disabled:opacity-50"
           >
@@ -386,7 +466,7 @@ export default function UsersPage() {
             {selectedUserIds.length > 0 && (
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => handleBulkValidateEmails()}
+                  onClick={() => { setTargetType('selected'); setIsBulkValidateModalOpen(true); }}
                   disabled={bulkValidating}
                   className="inline-flex items-center px-3.5 py-2 bg-indigo-50 border border-indigo-200 text-indigo-700 font-semibold text-xs rounded-xl hover:bg-indigo-100 transition-colors shadow-xs disabled:opacity-50"
                 >
@@ -795,77 +875,103 @@ export default function UsersPage() {
         </div>
       </div>
 
-      {/* BULK VALIDATE EMAILS MODAL */}
+      {/* BULK VALIDATE EMAILS EXECUTION MODAL (DO NOW vs USE BACKGROUND WORKER) */}
       {isBulkValidateModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-5">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-5">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-5 h-5 text-indigo-600" />
-                <h3 className="font-extrabold text-slate-900 text-base">Bulk Email Validation (MSG91)</h3>
+                <h3 className="font-extrabold text-slate-900 text-base">Bulk Email Validation (MSG91 API)</h3>
               </div>
               <button onClick={() => setIsBulkValidateModalOpen(false)} className="text-slate-400 hover:text-slate-600">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <p className="text-xs text-slate-600 leading-relaxed">
-              Select how you would like to run bulk email deliverability validation via MSG91 API:
-            </p>
-
-            <div className="space-y-3">
-              {/* Option 1: Selected Customers */}
-              {selectedUserIds.length > 0 && (
+            {/* Target Selector Tabs */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-2">Select Validation Target:</label>
+              <div className="grid grid-cols-3 gap-2 text-xs font-semibold">
+                {selectedUserIds.length > 0 && (
+                  <button
+                    onClick={() => setTargetType('selected')}
+                    className={`py-2 px-3 rounded-xl border text-center transition-colors ${
+                      targetType === 'selected' ? 'bg-indigo-50 border-indigo-300 text-indigo-700 font-bold' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    Selected ({selectedUserIds.length})
+                  </button>
+                )}
                 <button
-                  onClick={() => handleBulkValidateEmails(selectedUserIds, false)}
-                  disabled={bulkValidating}
-                  className="w-full p-3.5 bg-indigo-50 border border-indigo-200 rounded-xl text-left hover:bg-indigo-100 transition-colors flex items-start gap-3 group"
+                  onClick={() => setTargetType('page')}
+                  className={`py-2 px-3 rounded-xl border text-center transition-colors ${
+                    targetType === 'page' ? 'bg-indigo-50 border-indigo-300 text-indigo-700 font-bold' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                  }`}
                 >
-                  <CheckCircle2 className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="font-bold text-indigo-900 text-xs block">
-                      Validate Selected Customers ({selectedUserIds.length})
-                    </span>
-                    <span className="text-[11px] text-indigo-700 block mt-0.5">
-                      Runs MSG91 validation for the {selectedUserIds.length} customer(s) selected with checkboxes.
-                    </span>
-                  </div>
+                  Current Page ({users.length})
                 </button>
-              )}
+                <button
+                  onClick={() => setTargetType('all')}
+                  className={`py-2 px-3 rounded-xl border text-center transition-colors ${
+                    targetType === 'all' ? 'bg-purple-50 border-purple-300 text-purple-700 font-bold' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  All Unvalidated
+                </button>
+              </div>
+            </div>
 
-              {/* Option 2: Current Page Customers */}
-              <button
-                onClick={() => handleBulkValidateEmails(users.map(u => u.id), false)}
-                disabled={bulkValidating || users.length === 0}
-                className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-left hover:bg-slate-100 transition-colors flex items-start gap-3 group"
-              >
-                <Mail className="w-4 h-4 text-slate-600 shrink-0 mt-0.5" />
-                <div>
-                  <span className="font-bold text-slate-900 text-xs block">
-                    Validate Current Page ({users.length} Customers)
-                  </span>
-                  <span className="text-[11px] text-slate-500 block mt-0.5">
-                    Validates email addresses for all customer records currently displayed on this page.
-                  </span>
-                </div>
-              </button>
+            {/* Mode Option Cards */}
+            <div className="space-y-3 pt-2">
+              <span className="text-xs font-bold text-slate-700 block">Choose Execution Mode:</span>
 
-              {/* Option 3: All Unvalidated Customers */}
-              <button
-                onClick={() => handleBulkValidateEmails([], true)}
-                disabled={bulkValidating}
-                className="w-full p-3.5 bg-purple-50 border border-purple-200 rounded-xl text-left hover:bg-purple-100 transition-colors flex items-start gap-3 group"
-              >
-                <RefreshCw className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
-                <div>
-                  <span className="font-bold text-purple-900 text-xs block">
-                    Validate All Unvalidated in CRM (Batch of 100)
-                  </span>
-                  <span className="text-[11px] text-purple-700 block mt-0.5">
-                    Automatically scans the CRM for customer records without email validation status and validates them in bulk.
-                  </span>
+              {/* Option 1: DO NOW */}
+              <div className="p-4 bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-2xl space-y-3">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-2">
+                    <Zap className="w-5 h-5 text-indigo-600 shrink-0" />
+                    <div>
+                      <h4 className="font-extrabold text-indigo-950 text-sm">DO NOW (Real-time Progress)</h4>
+                      <p className="text-[11px] text-indigo-700 mt-0.5">
+                        Validates email addresses 1-by-1 live with real-time progress bar & counts.
+                      </p>
+                    </div>
+                  </div>
                 </div>
-              </button>
+
+                <div className="flex items-center gap-2 bg-white/80 p-2.5 rounded-xl border border-indigo-100 text-xs text-indigo-900 font-mono">
+                  <Clock className="w-4 h-4 text-indigo-600 shrink-0" />
+                  <span>Estimated Time: ~{targetType === 'selected' ? selectedUserIds.length : targetType === 'page' ? users.length : 30} sec (1 email / sec)</span>
+                </div>
+
+                <button
+                  onClick={() => handleRunDoNowProgress(targetType)}
+                  className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-2"
+                >
+                  <Zap className="w-4 h-4 fill-white" /> Start Validation Now
+                </button>
+              </div>
+
+              {/* Option 2: USE BACKGROUND WORKER */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3 hover:bg-slate-100/80 transition-colors">
+                <div className="flex items-start gap-3">
+                  <Cpu className="w-5 h-5 text-slate-600 shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="font-extrabold text-slate-900 text-sm">USE BACKGROUND WORKER</h4>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Delegates processing to the background worker. You can close this window and continue working.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => handleRunBackgroundWorker(targetType)}
+                  className="w-full py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-2"
+                >
+                  <Cpu className="w-4 h-4" /> Queue in Background Worker
+                </button>
+              </div>
             </div>
 
             <div className="flex justify-end pt-2">
@@ -876,6 +982,53 @@ export default function UsersPage() {
               >
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* LIVE PROGRESS MODAL FOR "DO NOW" MODE */}
+      {progressState && (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-5">
+            <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+              <Loader2 className="w-5 h-5 text-indigo-600 animate-spin" />
+              <h3 className="font-extrabold text-slate-900 text-base">Validating Emails Live...</h3>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs font-bold text-slate-700">
+                <span>Progress: {progressState.current} of {progressState.total} emails</span>
+                <span className="font-mono">{Math.round((progressState.current / progressState.total) * 100)}%</span>
+              </div>
+
+              {/* Progress Bar */}
+              <div className="w-full bg-slate-100 h-3.5 rounded-full overflow-hidden p-0.5 border border-slate-200">
+                <div
+                  className="bg-indigo-600 h-full rounded-full transition-all duration-300"
+                  style={{ width: `${(progressState.current / progressState.total) * 100}%` }}
+                ></div>
+              </div>
+
+              <div className="text-xs text-slate-500 font-mono truncate pt-1">
+                Validating: <span className="text-slate-900 font-bold">{progressState.currentEmail}</span>
+              </div>
+            </div>
+
+            {/* Live Stats */}
+            <div className="grid grid-cols-3 gap-2 text-center text-xs pt-2">
+              <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl">
+                <span className="text-emerald-800 font-bold block">Deliverable</span>
+                <span className="text-lg font-black text-emerald-600">{progressState.deliverable}</span>
+              </div>
+              <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl">
+                <span className="text-rose-800 font-bold block">Undeliverable</span>
+                <span className="text-lg font-black text-rose-600">{progressState.undeliverable}</span>
+              </div>
+              <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl">
+                <span className="text-amber-800 font-bold block">Risky</span>
+                <span className="text-lg font-black text-amber-600">{progressState.risky}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -995,7 +1148,7 @@ export default function UsersPage() {
                     disabled={createLoading}
                     className="px-3 py-1.5 bg-amber-600 text-white font-bold rounded-lg text-xs hover:bg-amber-700 disabled:opacity-50 flex items-center"
                   >
-                    {createLoading && <Loader2 className="w-3 h-3 mr-1 animate-spin" />} Create Anyway
+                    {createLoading && <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />} Create Anyway
                   </button>
                 </div>
               </div>
