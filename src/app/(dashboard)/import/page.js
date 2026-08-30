@@ -359,6 +359,7 @@ export default function ImportPage() {
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Email</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Mobile</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">City</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Country</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Tag 1</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Remark</th>
                 </tr>
@@ -366,7 +367,7 @@ export default function ImportPage() {
               <tbody className="bg-white divide-y divide-slate-100">
                 {currentPaginatedRows.length === 0 ? (
                   <tr>
-                    <td colSpan="8" className="px-6 py-12 text-center text-slate-400 text-sm">No records match the selected status filter.</td>
+                    <td colSpan="9" className="px-6 py-12 text-center text-slate-400 text-sm">No records match the selected status filter.</td>
                   </tr>
                 ) : (
                   currentPaginatedRows.map((row, idx) => (
@@ -377,6 +378,7 @@ export default function ImportPage() {
                       <td className="px-6 py-3.5 whitespace-nowrap text-sm text-slate-600">{row.email || '-'}</td>
                       <td className="px-6 py-3.5 whitespace-nowrap text-sm text-slate-600 font-mono">{row.country_code ? `${row.country_code} ` : ''}{row.mobile || '-'}</td>
                       <td className="px-6 py-3.5 whitespace-nowrap text-sm text-slate-500">{row.city || '-'}</td>
+                      <td className="px-6 py-3.5 whitespace-nowrap text-sm text-slate-500">{row.country || '-'}</td>
                       <td className="px-6 py-3.5 whitespace-nowrap text-sm text-slate-500">{row.tag1 || '-'}</td>
                       <td className="px-6 py-3.5 whitespace-nowrap text-xs text-slate-400 max-w-xs truncate">{row.remark || '-'}</td>
                     </tr>
