@@ -141,14 +141,14 @@ export default function UsersPage() {
     return []; // 'all' handled by backend query
   };
 
+  const [modalError, setModalError] = useState('');
+
   // Handle Mode 1: USE BACKGROUND WORKER
   const handleRunBackgroundWorker = async (type = targetType) => {
+    setModalError('');
     const list = getTargetUserList(type);
     const isAll = type === 'all';
     const ids = isAll ? [] : list.map(u => u.id);
-
-    setIsBulkValidateModalOpen(false);
-    setValidationMsg(`IT WILL BE VALIDATED SOON. Validation queued for ${isAll ? 'all unvalidated customer' : ids.length} email(s) in the background.`);
 
     const res = await fetchApi('/users/bulk-validate-email', {
       method: 'POST',
@@ -160,12 +160,18 @@ export default function UsersPage() {
     });
 
     if (!res.success) {
-      alert(res.error?.message || 'Failed to queue background validation');
+      // DO NOT AUTO-CLOSE MODAL ON ERROR
+      setModalError(res.error?.message || 'Failed to queue background validation');
+      return;
     }
+
+    setIsBulkValidateModalOpen(false);
+    setValidationMsg(`IT WILL BE VALIDATED SOON. Validation queued for ${isAll ? 'all unvalidated customer' : ids.length} email(s) in the background.`);
   };
 
   // Handle Mode 2: DO NOW (Real-time Step-by-Step Loop with Live Progress Bar)
   const handleRunDoNowProgress = async (type = targetType) => {
+    setModalError('');
     const isAll = type === 'all';
     let targetUsersList = [];
 
@@ -180,7 +186,7 @@ export default function UsersPage() {
     }
 
     if (targetUsersList.length === 0) {
-      alert('No customer emails found matching criteria to validate.');
+      setModalError('No customer emails found matching criteria to validate.');
       return;
     }
 
@@ -198,20 +204,18 @@ export default function UsersPage() {
       currentEmail: targetUsersList[0].email,
       deliverable: 0,
       undeliverable: 0,
-      risky: 0
+      risky: 0,
+      error: null
     });
 
     // Execute 1-by-1 in loop with UI update per step
     for (let i = 0; i < totalCount; i++) {
       const currentUser = targetUsersList[i];
-      setProgressState({
+      setProgressState(prev => ({
+        ...prev,
         current: i + 1,
-        total: totalCount,
-        currentEmail: currentUser.email,
-        deliverable: deliverableCount,
-        undeliverable: undeliverableCount,
-        risky: riskyCount
-      });
+        currentEmail: currentUser.email
+      }));
 
       const res = await fetchApi(`/users/${currentUser.id}/validate-email`, { method: 'POST' });
       if (res.success && res.data?.validation) {
@@ -220,18 +224,34 @@ export default function UsersPage() {
         else if (valStatus === 'undeliverable') undeliverableCount++;
         else if (valStatus === 'risky') riskyCount++;
 
+        setProgressState(prev => ({
+          ...prev,
+          deliverable: deliverableCount,
+          undeliverable: undeliverableCount,
+          risky: riskyCount
+        }));
+
         setUsers(prev => prev.map(u => u.id === currentUser.id ? {
           ...u,
           email_validation_status: valStatus,
           email_validation_reason: res.data.validation.reason,
           email_validated_at: new Date().toISOString()
         } : u));
+      } else if (!res.success) {
+        // DO NOT AUTO-CLOSE MODAL ON ERROR! Capture error & pause loop inside modal!
+        const errText = res.error?.message || 'Validation failed';
+        setProgressState(prev => ({
+          ...prev,
+          error: errText
+        }));
+        setBulkValidating(false);
+        return; // Keep modal open with error details displayed!
       }
     }
 
     setBulkValidating(false);
     setProgressState(null);
-    setValidationMsg(`Bulk Email Validation Complete! ${totalCount} email(s) validated: ${deliverableCount} Deliverable, ${undeliverableCount} Undeliverable.`);
+    setValidationMsg(`Bulk Email Validation Complete! ${totalCount} email(s) processed.`);
     loadUsers();
     setTimeout(() => setValidationMsg(''), 6000);
   };
@@ -914,6 +934,13 @@ export default function UsersPage() {
               </div>
             </div>
 
+            {modalError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs font-bold flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <span>{modalError}</span>
+              </div>
+            )}
+
             {/* Mode Option Cards */}
             <div className="space-y-3 pt-2">
               <span className="text-xs font-bold text-slate-700 block">Choose Execution Mode:</span>
@@ -983,29 +1010,57 @@ export default function UsersPage() {
       {progressState && (
         <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-5">
-            <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
-              <Loader2 className="w-5 h-5 text-indigo-600 animate-spin" />
-              <h3 className="font-extrabold text-slate-900 text-base">Validating Emails Live...</h3>
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                {progressState.error ? (
+                  <AlertCircle className="w-5 h-5 text-rose-600" />
+                ) : (
+                  <Loader2 className="w-5 h-5 text-indigo-600 animate-spin" />
+                )}
+                <h3 className="font-extrabold text-slate-900 text-base">
+                  {progressState.error ? 'Validation Error Encountered' : 'Validating Emails Live...'}
+                </h3>
+              </div>
+              {progressState.error && (
+                <button onClick={() => { setProgressState(null); setBulkValidating(false); }} className="text-slate-400 hover:text-slate-600">
+                  <X className="w-5 h-5" />
+                </button>
+              )}
             </div>
 
-            <div className="space-y-2">
-              <div className="flex justify-between text-xs font-bold text-slate-700">
-                <span>Progress: {progressState.current} of {progressState.total} emails</span>
-                <span className="font-mono">{Math.round((progressState.current / progressState.total) * 100)}%</span>
+            {progressState.error ? (
+              <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl space-y-2">
+                <div className="font-bold text-rose-900 text-xs flex items-center gap-1.5">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>Validation Stopped due to Error:</span>
+                </div>
+                <p className="text-xs text-rose-800 font-medium leading-relaxed">
+                  {progressState.error}
+                </p>
+                <div className="text-[11px] text-rose-600 pt-1">
+                  Processed {Math.max(0, progressState.current - 1)} of {progressState.total} emails before stopping.
+                </div>
               </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex justify-between text-xs font-bold text-slate-700">
+                  <span>Progress: {progressState.current} of {progressState.total} emails</span>
+                  <span className="font-mono">{Math.round((progressState.current / progressState.total) * 100)}%</span>
+                </div>
 
-              {/* Progress Bar */}
-              <div className="w-full bg-slate-100 h-3.5 rounded-full overflow-hidden p-0.5 border border-slate-200">
-                <div
-                  className="bg-indigo-600 h-full rounded-full transition-all duration-300"
-                  style={{ width: `${(progressState.current / progressState.total) * 100}%` }}
-                ></div>
-              </div>
+                {/* Progress Bar */}
+                <div className="w-full bg-slate-100 h-3.5 rounded-full overflow-hidden p-0.5 border border-slate-200">
+                  <div
+                    className="bg-indigo-600 h-full rounded-full transition-all duration-300"
+                    style={{ width: `${(progressState.current / progressState.total) * 100}%` }}
+                  ></div>
+                </div>
 
-              <div className="text-xs text-slate-500 font-mono truncate pt-1">
-                Validating: <span className="text-slate-900 font-bold">{progressState.currentEmail}</span>
+                <div className="text-xs text-slate-500 font-mono truncate pt-1">
+                  Validating: <span className="text-slate-900 font-bold">{progressState.currentEmail}</span>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Live Stats */}
             <div className="grid grid-cols-3 gap-2 text-center text-xs pt-2">
@@ -1022,6 +1077,18 @@ export default function UsersPage() {
                 <span className="text-lg font-black text-amber-600">{progressState.risky}</span>
               </div>
             </div>
+
+            {progressState.error && (
+              <div className="flex justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setProgressState(null); setBulkValidating(false); }}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl shadow-xs"
+                >
+                  Close Modal
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
