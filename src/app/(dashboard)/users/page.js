@@ -785,25 +785,17 @@ export default function UsersPage() {
                                 onClick={() => handleValidateSingleEmail(u.id)}
                                 disabled={validatingUserIds.includes(u.id)}
                                 className="inline-flex items-center text-[10px] font-bold transition-all disabled:opacity-50"
-                                title={valReason || valStatus || 'Validate Email with MSG91'}
+                                title={valStatus ? `Status: ${valStatus} ${valReason ? `(${valReason})` : ''}` : 'Click to validate with MSG91'}
                               >
                                 {validatingUserIds.includes(u.id) ? (
                                   <Loader2 className="w-3 h-3 animate-spin text-indigo-600" />
-                                ) : valStatus === 'deliverable' ? (
-                                  <span className="inline-flex items-center gap-0.5 bg-emerald-100 text-emerald-800 border border-emerald-300 px-1.5 py-0.5 rounded-md text-[10px] font-bold">
-                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Deliverable
-                                  </span>
-                                ) : valStatus === 'undeliverable' ? (
-                                  <span className="inline-flex items-center gap-0.5 bg-rose-100 text-rose-800 border border-rose-300 px-1.5 py-0.5 rounded-md text-[10px] font-bold" title={valReason}>
-                                    <AlertCircle className="w-3 h-3 text-rose-600" /> Undeliverable {valReason ? `(${valReason})` : ''}
-                                  </span>
-                                ) : valStatus === 'risky' ? (
-                                  <span className="inline-flex items-center gap-0.5 bg-amber-100 text-amber-800 border border-amber-300 px-1.5 py-0.5 rounded-md text-[10px] font-bold">
-                                    <AlertTriangle className="w-3 h-3 text-amber-600" /> Risky
+                                ) : (valStatus && valStatus !== 'unknown') ? (
+                                  <span className="inline-flex items-center gap-0.5 bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded-md text-[10px] font-bold">
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Validated
                                   </span>
                                 ) : (
-                                  <span className="text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-1.5 py-0.5 rounded-md text-[10px] font-bold">
-                                    Validate
+                                  <span className="text-slate-600 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200 px-2 py-0.5 rounded-md text-[10px] font-bold">
+                                    Not Validated
                                   </span>
                                 )}
                               </button>
