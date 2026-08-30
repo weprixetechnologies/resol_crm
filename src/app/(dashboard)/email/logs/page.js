@@ -5,7 +5,7 @@ import { fetchApi } from '@/lib/api';
 import Link from 'next/link';
 import { 
   History, Search, Loader2, Send, ChevronLeft, ChevronRight, 
-  AlertTriangle, CheckCircle2, AlertCircle, Eye, X, Clock, RefreshCw, Code, Filter, Server, ShieldAlert, Check
+  CheckCircle2, AlertCircle, Eye, X, Clock, RefreshCw, Server, ShieldAlert, Check, Trash2, AlertTriangle
 } from 'lucide-react';
 
 export default function EmailLogsPage() {
@@ -31,6 +31,13 @@ export default function EmailLogsPage() {
   const [selectedLogId, setSelectedLogId] = useState(null);
   const [journeyData, setJourneyData] = useState(null);
   const [journeyLoading, setJourneyLoading] = useState(false);
+
+  // BULK SELECTION STATE
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteRemarks, setDeleteRemarks] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [deleteSuccessMsg, setDeleteSuccessMsg] = useState('');
 
   const loadLogs = async () => {
     setLoading(true);
@@ -122,16 +129,64 @@ export default function EmailLogsPage() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setPage(1);
+      setSelectedIds([]);
       loadLogs();
     }, 400);
     return () => clearTimeout(timer);
   }, [search, statusFilter, activeTab, startDate, endDate]);
 
   useEffect(() => {
+    setSelectedIds([]);
     loadLogs();
   }, [page]);
 
-  const getStatusBadge = (status, failureReason) => {
+  // Bulk Selection Handlers
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      const allCurrentIds = logs.map(l => l.id || l.crqid || l.requestId || l.imri).filter(Boolean);
+      setSelectedIds(allCurrentIds);
+    } else {
+      setSelectedIds([]);
+    }
+  };
+
+  const handleSelectRow = (id) => {
+    if (selectedIds.includes(id)) {
+      setSelectedIds(selectedIds.filter(i => i !== id));
+    } else {
+      setSelectedIds([...selectedIds, id]);
+    }
+  };
+
+  const handleBulkRequestDeleteSubmit = async (e) => {
+    e.preventDefault();
+    if (!deleteRemarks.trim()) return;
+
+    setDeleting(true);
+    const selectedRows = logs.filter(l => selectedIds.includes(l.id || l.crqid || l.requestId || l.imri));
+    const recipientEmails = selectedRows.map(l => l.recipient_email || l.recipientEmail).filter(Boolean);
+
+    const res = await fetchApi('/email/logs/bulk-request-deletion', {
+      method: 'POST',
+      body: JSON.stringify({
+        logIds: selectedIds,
+        recipientEmails: recipientEmails,
+        reason: deleteRemarks.trim()
+      })
+    });
+
+    setDeleting(false);
+    if (res.success) {
+      setShowDeleteModal(false);
+      setDeleteRemarks('');
+      setSelectedIds([]);
+      setDeleteSuccessMsg(res.message || `Successfully requested deletion for selected recipients with remarks.`);
+      loadLogs();
+      setTimeout(() => setDeleteSuccessMsg(''), 5000);
+    }
+  };
+
+  const getStatusBadge = (status) => {
     const st = String(status || '').toUpperCase();
     if (st === 'DELIVERED') {
       return (
@@ -211,6 +266,19 @@ export default function EmailLogsPage() {
         </div>
       </div>
 
+      {/* Success Notification Banner */}
+      {deleteSuccessMsg && (
+        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-800 text-xs font-bold flex items-center justify-between shadow-xs">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            <span>{deleteSuccessMsg}</span>
+          </div>
+          <button onClick={() => setDeleteSuccessMsg('')} className="text-emerald-500 hover:text-emerald-700">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Navigation Tabs */}
       <div className="flex items-center gap-2 border-b border-slate-200">
         <button
@@ -237,57 +305,85 @@ export default function EmailLogsPage() {
 
       {/* Main Table Container */}
       <div className="bg-white rounded-2xl shadow-xs border border-slate-200 overflow-hidden">
-        {/* Search, Date Filter & Status Filter Bar */}
-        <div className="p-4 border-b border-slate-100 flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-4 bg-slate-50/50">
-          <div className="relative flex-1">
-            <Search className="h-4 w-4 text-slate-400 absolute left-3 top-3" />
-            <input
-              type="text"
-              placeholder="Search by recipient email, name, subject, CRQID, or failure reason..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="block w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl leading-5 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Date Pickers */}
+        {/* Bulk Action Header Bar when rows are selected */}
+        {selectedIds.length > 0 ? (
+          <div className="p-3.5 bg-rose-50/90 border-b border-rose-200 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-extrabold text-rose-900 bg-rose-200/80 px-2.5 py-1 rounded-lg">
+                {selectedIds.length} item(s) selected
+              </span>
+              <span className="text-xs text-rose-700 font-medium hidden sm:inline">
+                Bulk action available for selected recipient logs
+              </span>
+            </div>
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowDeleteModal(true)}
+                className="inline-flex items-center px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5 mr-1.5" /> REQUEST DELETE
+              </button>
+              <button
+                onClick={() => setSelectedIds([])}
+                className="px-3 py-2 bg-white hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl border border-rose-200 transition-colors"
+              >
+                Clear Selection
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* Search, Date Filter & Status Filter Bar */
+          <div className="p-4 border-b border-slate-100 flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-4 bg-slate-50/50">
+            <div className="relative flex-1">
+              <Search className="h-4 w-4 text-slate-400 absolute left-3 top-3" />
               <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-medium bg-white text-slate-700"
-              />
-              <span className="text-xs text-slate-400">to</span>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-medium bg-white text-slate-700"
+                type="text"
+                placeholder="Search by recipient email, name, subject, CRQID, or failure reason..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="block w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl leading-5 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
 
-            {/* Status Filter */}
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold bg-white text-slate-700 focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="all">All Statuses</option>
-              <option value="DELIVERED">Delivered</option>
-              <option value="FAILED">Failed</option>
-              <option value="REJECTED">Rejected</option>
-              <option value="BOUNCED">Bounced</option>
-              <option value="OPENED">Opened</option>
-              <option value="CLICKED">Clicked</option>
-              <option value="UNSUBSCRIBED">Unsubscribed</option>
-              <option value="QUEUED">Queued</option>
-            </select>
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Date Pickers */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-medium bg-white text-slate-700"
+                />
+                <span className="text-xs text-slate-400">to</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-medium bg-white text-slate-700"
+                />
+              </div>
 
-            <span className="text-xs text-slate-500 font-bold whitespace-nowrap">Total: {total}</span>
+              {/* Status Filter */}
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold bg-white text-slate-700 focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="all">All Statuses</option>
+                <option value="DELIVERED">Delivered</option>
+                <option value="FAILED">Failed</option>
+                <option value="REJECTED">Rejected</option>
+                <option value="BOUNCED">Bounced</option>
+                <option value="OPENED">Opened</option>
+                <option value="CLICKED">Clicked</option>
+                <option value="UNSUBSCRIBED">Unsubscribed</option>
+                <option value="QUEUED">Queued</option>
+              </select>
+
+              <span className="text-xs text-slate-500 font-bold whitespace-nowrap">Total: {total}</span>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Logs Table */}
         <div className="overflow-x-auto min-h-[400px]">
@@ -305,6 +401,14 @@ export default function EmailLogsPage() {
             <table className="min-w-full divide-y divide-slate-100 text-left border-collapse">
               <thead className="bg-slate-50">
                 <tr className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  <th className="px-4 py-3.5 w-10 text-center">
+                    <input
+                      type="checkbox"
+                      onChange={handleSelectAll}
+                      checked={logs.length > 0 && logs.every(l => selectedIds.includes(l.id || l.crqid || l.requestId || l.imri))}
+                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+                    />
+                  </th>
                   <th className="px-5 py-3.5">Recipient</th>
                   <th className="px-5 py-3.5">Subject & Template</th>
                   <th className="px-5 py-3.5">CRQID / MSG ID</th>
@@ -315,6 +419,8 @@ export default function EmailLogsPage() {
               </thead>
               <tbody className="bg-white divide-y divide-slate-100 text-xs">
                 {logs.map((log, index) => {
+                  const rowId = log.id || log.crqid || log.requestId || log.imri || index;
+                  const isSelected = selectedIds.includes(rowId);
                   const recipientEmail = log.recipient_email || log.recipientEmail || '';
                   const recipientName = log.recipient_name || log.recipientName || 'Recipient';
                   const subject = log.subject || '';
@@ -325,8 +431,26 @@ export default function EmailLogsPage() {
                   const failureReason = log.failure_reason || log.failureReason || log.error_message || log.description || null;
                   const createdAt = log.created_at || log.createdAt || log.statusUpdatedAt;
 
+                  const st = String(status).toUpperCase();
+                  const isFailedOrRejected = st === 'FAILED' || st === 'REJECTED' || st === 'BOUNCED' || st === 'HARD_BOUNCE' || st === 'SOFT_BOUNCE';
+                  
+                  // ONLY SHOW RED FAILURE BANNER IF STATUS IS FAILED/REJECTED/BOUNCED OR REASON IS NOT "OK"
+                  const hasGenuineError = failureReason && failureReason.trim().toUpperCase() !== 'OK' && failureReason.trim() !== '200';
+                  const showFailureBanner = (isFailedOrRejected || hasGenuineError) && st !== 'DELIVERED' && st !== 'OPENED' && st !== 'CLICKED';
+
                   return (
-                    <tr key={log.id || index} className="hover:bg-slate-50/80 transition-colors">
+                    <tr 
+                      key={rowId} 
+                      className={`transition-colors ${isSelected ? 'bg-indigo-50/50' : 'hover:bg-slate-50/80'}`}
+                    >
+                      <td className="px-4 py-3.5 text-center">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleSelectRow(rowId)}
+                          className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+                        />
+                      </td>
                       <td className="px-5 py-3.5">
                         <div className="font-bold text-slate-900">{recipientName}</div>
                         <div className="text-slate-500 font-mono text-[11px]">{recipientEmail}</div>
@@ -335,8 +459,8 @@ export default function EmailLogsPage() {
                         <div className="font-medium text-slate-900 truncate" title={subject}>{subject}</div>
                         <div className="text-[11px] text-slate-400 truncate">{templateName}</div>
 
-                        {/* FAILURE REASON CALLOUT BANNER */}
-                        {failureReason && (
+                        {/* FAILURE REASON CALLOUT BANNER - ONLY FOR GENUINE ERRORS */}
+                        {showFailureBanner && (
                           <div className="mt-1.5 p-2 bg-rose-50 border border-rose-200 rounded-lg text-rose-800 text-[11px] leading-tight font-medium flex items-start gap-1.5">
                             <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
                             <span className="break-all">{failureReason}</span>
@@ -348,7 +472,7 @@ export default function EmailLogsPage() {
                         <div className="text-[10px] text-slate-400 truncate max-w-[140px]" title={msgId}>{msgId}</div>
                       </td>
                       <td className="px-5 py-3.5 whitespace-nowrap text-center">
-                        {getStatusBadge(status, failureReason)}
+                        {getStatusBadge(status)}
                       </td>
                       <td className="px-5 py-3.5 whitespace-nowrap text-slate-500 font-mono text-[11px]">
                         {createdAt ? new Date(createdAt).toLocaleString() : '-'}
@@ -364,7 +488,7 @@ export default function EmailLogsPage() {
                         ) : (
                           <button
                             onClick={() => {
-                              setSelectedLogId(log.id || index);
+                              setSelectedLogId(rowId);
                               setJourneyData({ log, timeline: log.timeline || [] });
                             }}
                             className="inline-flex items-center text-xs font-bold text-indigo-600 hover:text-indigo-900 px-2.5 py-1 hover:bg-indigo-50 rounded-lg transition-colors"
@@ -404,6 +528,66 @@ export default function EmailLogsPage() {
           </div>
         </div>
       </div>
+
+      {/* REQUEST DELETION BULK MODAL */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <Trash2 className="w-5 h-5 text-rose-600" />
+                <h3 className="font-extrabold text-slate-900 text-base">Request Deletion for Selected Logs</h3>
+              </div>
+              <button onClick={() => setShowDeleteModal(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleBulkRequestDeleteSubmit} className="space-y-4 text-xs">
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 space-y-1">
+                <span className="font-bold flex items-center">
+                  <AlertTriangle className="w-4 h-4 mr-1 text-amber-600" /> Standard Approval Workflow Notice
+                </span>
+                <p className="text-[11px] text-amber-800 leading-relaxed">
+                  Requesting deletion will flag all contacts linked to the <strong>{selectedIds.length} selected email log(s)</strong> for deletion approval in the Admin Deletion Queue.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Remarks / Reason for Deletion Request <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  required
+                  rows={4}
+                  value={deleteRemarks}
+                  onChange={(e) => setDeleteRemarks(e.target.value)}
+                  placeholder="Provide explicit remarks explaining why deletion is requested for these records..."
+                  className="w-full border border-slate-200 rounded-xl p-3 text-xs bg-slate-50 focus:bg-white focus:ring-2 focus:ring-rose-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteModal(false)}
+                  className="px-4 py-2 border border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={deleting || !deleteRemarks.trim()}
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl disabled:opacity-50 flex items-center shadow-xs"
+                >
+                  {deleting ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5 mr-1.5" />}
+                  Submit Deletion Request
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Per-Email Lifecycle Journey / Details Modal */}
       {selectedLogId && (
@@ -451,7 +635,8 @@ export default function EmailLogsPage() {
                 </div>
 
                 {/* Failure diagnostic banner if any */}
-                {(journeyData?.log?.failure_reason || journeyData?.log?.failureReason || journeyData?.log?.description) && (
+                {(journeyData?.log?.failure_reason || journeyData?.log?.failureReason || journeyData?.log?.description) && 
+                 String(journeyData?.log?.failure_reason || journeyData?.log?.failureReason || journeyData?.log?.description).trim().toUpperCase() !== 'OK' && (
                   <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 space-y-1">
                     <span className="font-bold flex items-center text-xs">
                       <AlertCircle className="w-4 h-4 mr-1.5 text-rose-600" /> Diagnostic Failure / Rejection Reason:
