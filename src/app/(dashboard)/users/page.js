@@ -660,6 +660,202 @@ export default function UsersPage() {
           </div>
         </div>
       )}
+
+      {/* ADD CUSTOMER MODAL */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-xl w-full p-6 space-y-5 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <UserPlus className="w-5 h-5 text-indigo-600" />
+                <h3 className="font-extrabold text-slate-900 text-base">Add New Customer</h3>
+              </div>
+              <button onClick={() => { setIsModalOpen(false); setFuzzyCandidates(null); setCreateError(''); }} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {createError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs font-medium">
+                {createError}
+              </div>
+            )}
+
+            {fuzzyCandidates && (
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-3">
+                <div className="flex items-center text-amber-900 font-bold text-xs">
+                  <AlertTriangle className="w-4 h-4 mr-1.5 text-amber-600 flex-shrink-0" />
+                  <span>Possible Duplicate Customer Detected!</span>
+                </div>
+                <p className="text-[11px] text-amber-800">
+                  Existing customer(s) match the name, email, or details you entered:
+                </p>
+                <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                  {fuzzyCandidates.map((c, i) => (
+                    <div key={i} className="p-2 bg-white rounded-lg border border-amber-200 text-[11px] flex justify-between items-center">
+                      <div>
+                        <span className="font-bold text-slate-900">{c.name}</span>
+                        <span className="text-slate-500 font-mono ml-2">{c.email || c.mobile || ''}</span>
+                        <div className="text-[10px] text-slate-400">{c.institute} {c.city ? `(${c.city})` : ''}</div>
+                      </div>
+                      <Link href={`/users/${c.id}`} target="_blank" className="text-indigo-600 font-bold hover:underline shrink-0 text-[10px]">
+                        View Profile
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setFuzzyCandidates(null)}
+                    className="px-3 py-1.5 bg-white border border-amber-300 text-amber-900 font-bold rounded-lg text-xs hover:bg-amber-100"
+                  >
+                    Edit Input
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleCreateSubmit(true)}
+                    disabled={createLoading}
+                    className="px-3 py-1.5 bg-amber-600 text-white font-bold rounded-lg text-xs hover:bg-amber-700 disabled:opacity-50 flex items-center"
+                  >
+                    {createLoading && <Loader2 className="w-3 h-3 mr-1 animate-spin" />} Create Anyway
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {!fuzzyCandidates && (
+              <form onSubmit={(e) => { e.preventDefault(); handleCreateSubmit(false); }} className="space-y-4 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Full Name <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={newUserData.name}
+                      onChange={(e) => setNewUserData({ ...newUserData, name: e.target.value })}
+                      placeholder="e.g. Rahul Sharma"
+                      className="w-full border border-slate-200 rounded-xl p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Email Address
+                    </label>
+                    <input
+                      type="email"
+                      value={newUserData.email}
+                      onChange={(e) => setNewUserData({ ...newUserData, email: e.target.value })}
+                      placeholder="e.g. rahul@example.com"
+                      className="w-full border border-slate-200 rounded-xl p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Mobile Number
+                    </label>
+                    <input
+                      type="text"
+                      value={newUserData.mobile}
+                      onChange={(e) => setNewUserData({ ...newUserData, mobile: e.target.value })}
+                      placeholder="e.g. 9876543210"
+                      className="w-full border border-slate-200 rounded-xl p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      City
+                    </label>
+                    <input
+                      type="text"
+                      value={newUserData.city}
+                      onChange={(e) => setNewUserData({ ...newUserData, city: e.target.value })}
+                      placeholder="e.g. New Delhi"
+                      className="w-full border border-slate-200 rounded-xl p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Country
+                    </label>
+                    <input
+                      type="text"
+                      value={newUserData.country}
+                      onChange={(e) => setNewUserData({ ...newUserData, country: e.target.value })}
+                      placeholder="e.g. India"
+                      className="w-full border border-slate-200 rounded-xl p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Status
+                    </label>
+                    <select
+                      value={newUserData.status}
+                      onChange={(e) => setNewUserData({ ...newUserData, status: e.target.value })}
+                      className="w-full border border-slate-200 rounded-xl p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none font-bold text-slate-700"
+                    >
+                      <option value="active">active</option>
+                      <option value="unverified">unverified</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Tag 1
+                    </label>
+                    <input
+                      type="text"
+                      value={newUserData.tag1}
+                      onChange={(e) => setNewUserData({ ...newUserData, tag1: e.target.value })}
+                      placeholder="e.g. VIP Customer"
+                      className="w-full border border-slate-200 rounded-xl p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Tag 2
+                    </label>
+                    <input
+                      type="text"
+                      value={newUserData.tag2}
+                      onChange={(e) => setNewUserData({ ...newUserData, tag2: e.target.value })}
+                      placeholder="e.g. Lead 2026"
+                      className="w-full border border-slate-200 rounded-xl p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="px-4 py-2 border border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={createLoading || !newUserData.name.trim()}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl disabled:opacity-50 flex items-center shadow-xs"
+                  >
+                    {createLoading ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5 mr-1.5" />}
+                    Save Customer
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
