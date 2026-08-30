@@ -7,7 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import { 
   LayoutDashboard, Users, UserPlus, Settings, 
   Database, Shield, LogOut, Menu, X, Clock, Upload,
-  ChevronLeft, ChevronRight, ShieldAlert, Mail, FileText, Send, History, Zap, BarChart3
+  ChevronLeft, ChevronRight, ShieldAlert, Mail, FileText, Send, History, Zap, BarChart3, UserX
 } from 'lucide-react';
 
 export default function DashboardLayout({ children }) {
@@ -37,6 +37,7 @@ export default function DashboardLayout({ children }) {
     { name: 'Compose Mail', href: '/email/compose', icon: Send, exact: false },
     { name: 'Email Templates', href: '/email/templates', icon: FileText, exact: false },
     { name: 'Email Logs', href: '/email/logs', icon: History, exact: false },
+    { name: 'Bounced Emails', href: '/email/bounces', icon: UserX, exact: false },
   ];
 
   const adminNavigation = [
