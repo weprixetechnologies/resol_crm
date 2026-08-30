@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { fetchApi, api } from '@/lib/api';
 import Link from 'next/link';
-import { Search, Plus, ChevronLeft, ChevronRight, Loader2, UserPlus, Eye, AlertTriangle, Filter, X, Download, Trash2, Mail, Calendar, RefreshCw } from 'lucide-react';
+import { Search, Plus, ChevronLeft, ChevronRight, Loader2, UserPlus, Eye, AlertTriangle, Filter, X, Download, Trash2, Mail, Calendar, RefreshCw, CheckCircle2, AlertCircle, Check } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 export default function UsersPage() {
@@ -66,6 +66,11 @@ export default function UsersPage() {
   const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
   const [bulkDeleteError, setBulkDeleteError] = useState('');
 
+  // MSG91 Email Validation State
+  const [validatingUserIds, setValidatingUserIds] = useState([]);
+  const [bulkValidating, setBulkValidating] = useState(false);
+  const [validationMsg, setValidationMsg] = useState('');
+
   // Modal State for New Customer Data
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newUserData, setNewUserData] = useState({ name: '', email: '', mobile: '', city: '', country: 'India', status: 'active', tag1: '', tag2: '' });
@@ -106,8 +111,43 @@ export default function UsersPage() {
     }
   };
 
+  const handleValidateSingleEmail = async (userId) => {
+    setValidatingUserIds(prev => [...prev, userId]);
+    const res = await fetchApi(`/users/${userId}/validate-email`, { method: 'POST' });
+    setValidatingUserIds(prev => prev.filter(id => id !== userId));
+
+    if (res.success && res.data?.validation) {
+      const val = res.data.validation;
+      setUsers(prev => prev.map(u => u.id === userId ? {
+        ...u,
+        email_validation_status: val.resultStatus,
+        email_validation_reason: val.reason,
+        email_validated_at: new Date().toISOString()
+      } : u));
+    } else {
+      alert(res.error?.message || 'Email validation failed');
+    }
+  };
+
+  const handleBulkValidateEmails = async () => {
+    if (selectedUserIds.length === 0) return;
+    setBulkValidating(true);
+    const res = await fetchApi('/users/bulk-validate-email', {
+      method: 'POST',
+      body: JSON.stringify({ userIds: selectedUserIds })
+    });
+    setBulkValidating(false);
+
+    if (res.success) {
+      setValidationMsg(`Bulk Email Validation Complete: ${res.data?.totalValidated || selectedUserIds.length} customer email(s) processed.`);
+      loadUsers();
+      setTimeout(() => setValidationMsg(''), 5000);
+    } else {
+      alert(res.error?.message || 'Bulk email validation failed');
+    }
+  };
+
   useEffect(() => {
-    // Debounce search, filters, and limit
     const timer = setTimeout(() => {
       setPage(1);
       loadUsers();
@@ -120,17 +160,14 @@ export default function UsersPage() {
   }, [page]);
 
   const handleStatusChange = async (userId, newStatus) => {
-    // Optimistic UI update
     setUsers(users.map(u => u.id === userId ? { ...u, status: newStatus } : u));
-
     const res = await fetchApi(`/users/${userId}`, {
       method: 'PATCH',
       body: JSON.stringify({ status: newStatus })
     });
-
     if (!res.success) {
       alert(res.error?.message || 'Failed to update user status');
-      loadUsers(); // revert
+      loadUsers();
     }
   };
 
@@ -151,47 +188,49 @@ export default function UsersPage() {
     if (res.success) {
       setIsModalOpen(false);
       setNewUserData({ name: '', email: '', mobile: '', city: '', country: 'India', status: 'active', tag1: '', tag2: '' });
-      setFuzzyCandidates(null);
       loadUsers();
+    } else if (res.fuzzyCandidates) {
+      setFuzzyCandidates(res.fuzzyCandidates);
     } else {
-      if (res.error?.code === 'FUZZY_DUPLICATE') {
-        setFuzzyCandidates(res.error.candidates);
-      } else if (res.error?.code === 'CUSTOMER_EXISTS') {
-        setCreateError(`Customer Already Exists: Match found on ${res.error.matchedField || 'Email/Mobile'}. New query remark has been automatically logged.`);
-      } else {
-        setCreateError(res.error?.message || 'Failed to create customer record');
-      }
+      setCreateError(res.error?.message || 'Failed to add customer data');
     }
   };
 
   const handleExport = async () => {
     setExporting(true);
-    let url = '/users/export?';
-    if (search) url += `search=${encodeURIComponent(search)}&`;
-    
-    Object.keys(advancedFilters).forEach(key => {
-      if (advancedFilters[key] && advancedFilters[key] !== 'all') {
-        url += `${key}=${encodeURIComponent(advancedFilters[key])}&`;
-      }
-    });
-
     try {
-      const res = await api.get(url, { responseType: 'blob' });
-      const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      let url = `${process.env.NEXT_PUBLIC_API_URL || '/api'}/users/export?search=${encodeURIComponent(search)}`;
+      Object.keys(advancedFilters).forEach(key => {
+        if (advancedFilters[key] && advancedFilters[key] !== 'all') {
+          url += `&${key}=${encodeURIComponent(advancedFilters[key])}`;
+        }
+      });
+
+      const token = localStorage.getItem('token');
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) throw new Error('Export failed');
+
+      const blob = await response.blob();
       const downloadUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.setAttribute('download', `customer_data_export_${new Date().toISOString().substring(0,10)}.xlsx`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = `customer_data_export_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
     } catch (err) {
-      alert('Export failed. Please try again.');
+      alert(err.message || 'Error exporting customer data');
+    } finally {
+      setExporting(false);
     }
-    setExporting(false);
   };
 
-  // Selection Checkbox Logic
+  // Bulk Selection Handlers
   const selectableUsers = users.filter(u => u.is_deletion_requested !== 1);
   const isAllSelected = selectableUsers.length > 0 && selectableUsers.every(u => selectedUserIds.includes(u.id));
 
@@ -203,17 +242,18 @@ export default function UsersPage() {
     }
   };
 
-  const toggleSelectUser = (id) => {
-    if (selectedUserIds.includes(id)) {
-      setSelectedUserIds(selectedUserIds.filter(i => i !== id));
+  const toggleSelectUser = (userId) => {
+    if (selectedUserIds.includes(userId)) {
+      setSelectedUserIds(selectedUserIds.filter(id => id !== userId));
     } else {
-      setSelectedUserIds([...selectedUserIds, id]);
+      setSelectedUserIds([...selectedUserIds, userId]);
     }
   };
 
-  const handleBulkDeleteSubmit = async () => {
+  const handleBulkDeleteSubmit = async (e) => {
+    e.preventDefault();
     if (!bulkDeleteReason.trim()) {
-      setBulkDeleteError('Please enter a reason or remarks for requesting deletion.');
+      setBulkDeleteError('Reason/Remarks are required for requesting deletion.');
       return;
     }
 
@@ -222,101 +262,99 @@ export default function UsersPage() {
 
     const res = await fetchApi('/users/bulk-request-deletion', {
       method: 'POST',
-      body: JSON.stringify({ ids: selectedUserIds, reason: bulkDeleteReason.trim() })
+      body: JSON.stringify({
+        ids: selectedUserIds,
+        reason: bulkDeleteReason.trim()
+      })
     });
 
     setBulkDeleteLoading(false);
 
     if (res.success) {
       setIsBulkDeleteModalOpen(false);
-      setSelectedUserIds([]);
       setBulkDeleteReason('');
+      setSelectedUserIds([]);
       loadUsers();
     } else {
-      setBulkDeleteError(res.error?.message || 'Failed to submit deletion request');
+      setBulkDeleteError(res.error?.message || 'Failed to submit bulk deletion request');
     }
   };
 
-  const baseSNo = advancedFilters.fromSNo ? Math.max(1, parseInt(advancedFilters.fromSNo)) : 1;
-
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-12">
-      {/* Top Header */}
+    <div className="space-y-6">
+      {/* Top Banner for Serial Sync */}
+      {isSyncPending && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-amber-900 shadow-xs">
+          <div className="flex items-center space-x-3">
+            <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
+            <div className="text-xs">
+              <span className="font-bold block text-sm">Serial Number Sync Needed</span>
+              Customer records were deleted or archived. Re-sync to assign continuous S.No. (1..N).
+            </div>
+          </div>
+          <button
+            onClick={handleSyncSerialNumbers}
+            disabled={syncing}
+            className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center shrink-0 disabled:opacity-50"
+          >
+            {syncing ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 mr-1.5" />}
+            Re-sync S.No. Now
+          </button>
+        </div>
+      )}
+
+      {/* Validation Success Banner */}
+      {validationMsg && (
+        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-800 text-xs font-bold flex items-center justify-between shadow-xs">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            <span>{validationMsg}</span>
+          </div>
+          <button onClick={() => setValidationMsg('')} className="text-emerald-500 hover:text-emerald-700">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Header Actions */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Customer Database</h1>
-          <p className="text-sm text-slate-500 mt-1">Manage, search, filter, and track customer contact information & query logs.</p>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Customer Data</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Manage customers, email validation, staff codes, and deletion approvals.
+          </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          {user?.role === 'admin' && (
-            <button
-              onClick={handleSyncSerialNumbers}
-              disabled={syncing}
-              className={`inline-flex items-center px-4 py-2.5 font-semibold text-sm rounded-xl transition-colors shadow-xs disabled:opacity-50 ${
-                isSyncPending
-                  ? 'bg-amber-500 text-white hover:bg-amber-600 animate-pulse'
-                  : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              {syncing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className={`w-4 h-4 mr-2 ${isSyncPending ? 'text-white' : 'text-amber-600'}`} />}
-              {syncing ? 'Syncing S.No...' : (isSyncPending ? 'Sync Serial (Pending)' : 'Sync Serial Numbers')}
-            </button>
-          )}
-
+        <div className="flex items-center space-x-3">
           <button
             onClick={handleExport}
-            disabled={exporting}
-            className="inline-flex items-center px-4 py-2.5 bg-white border border-slate-300 text-slate-700 font-semibold text-sm rounded-xl hover:bg-slate-50 transition-colors shadow-xs disabled:opacity-50"
+            disabled={exporting || total === 0}
+            className="inline-flex items-center px-4 py-2 border border-slate-300 shadow-xs text-xs font-semibold rounded-xl text-slate-700 bg-white hover:bg-slate-50 transition-colors disabled:opacity-50"
           >
-            {exporting ? <Loader2 className="w-4 h-4 mr-2 animate-spin text-indigo-600" /> : <Download className="w-4 h-4 mr-2 text-indigo-600" />}
-            {exporting ? 'Exporting...' : 'Export Excel'}
+            {exporting ? <Loader2 className="w-4 h-4 mr-2 animate-spin text-indigo-600" /> : <Download className="w-4 h-4 mr-2 text-slate-500" />}
+            Export Excel
           </button>
 
           <button
             onClick={() => setIsModalOpen(true)}
-            className="inline-flex items-center px-4 py-2.5 bg-indigo-600 text-white font-semibold text-sm rounded-xl hover:bg-indigo-700 transition-colors shadow-sm"
+            className="inline-flex items-center px-4 py-2 border border-transparent shadow-xs text-xs font-bold rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 transition-colors"
           >
             <UserPlus className="w-4 h-4 mr-2" /> Add Customer
           </button>
         </div>
       </div>
 
-      {/* Serial Numbers Sync Pending Banner */}
-      {isSyncPending && (
-        <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
-          <div className="flex items-center space-x-3">
-            <div className="p-2 bg-amber-100 text-amber-700 rounded-xl">
-              <RefreshCw className="w-5 h-5" />
-            </div>
-            <div>
-              <h4 className="text-sm font-bold text-amber-900">Serial Numbers Sync Pending</h4>
-              <p className="text-xs text-amber-700 mt-0.5">Recent customer deletions occurred. Click to manually re-sequence S.No. without gaps.</p>
-            </div>
-          </div>
-          <button
-            onClick={handleSyncSerialNumbers}
-            disabled={syncing}
-            className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors disabled:opacity-50 flex items-center shrink-0"
-          >
-            {syncing ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-1.5" />}
-            {syncing ? 'Syncing S.No...' : 'Sync Serial Numbers Now'}
-          </button>
-        </div>
-      )}
-
-      {/* Main Table Card */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-        {/* Search & Filter Bar */}
-        <div className="p-4 border-b border-slate-200 bg-slate-50/50 flex flex-col md:flex-row gap-4 items-center justify-between">
-          <div className="relative w-full md:w-96">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+      {/* Controls & Search */}
+      <div className="bg-white rounded-2xl shadow-xs border border-slate-200 overflow-hidden">
+        <div className="p-4 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-50/50">
+          <div className="relative max-w-md w-full">
+            <Search className="h-4 w-4 text-slate-400 absolute left-3 top-3" />
             <input
               type="text"
-              placeholder="Search by name, email, mobile, city, tags..."
+              placeholder="Search by name, institute, department, city..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+              className="block w-full pl-9 pr-8 py-2 border border-slate-200 rounded-xl leading-5 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
             {search && (
               <button onClick={() => setSearch('')} className="absolute right-3 top-3 text-slate-400 hover:text-slate-600">
@@ -326,15 +364,25 @@ export default function UsersPage() {
           </div>
 
           <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
-            {/* Bulk Deletion Action Button */}
+            {/* Bulk Actions Button */}
             {selectedUserIds.length > 0 && (
-              <button
-                onClick={() => { setBulkDeleteReason(''); setBulkDeleteError(''); setIsBulkDeleteModalOpen(true); }}
-                className="inline-flex items-center px-3.5 py-2 bg-rose-50 border border-rose-200 text-rose-700 font-semibold text-xs rounded-xl hover:bg-rose-100 transition-colors shadow-xs"
-              >
-                <Trash2 className="w-3.5 h-3.5 mr-1.5 text-rose-600" />
-                Request Deletion ({selectedUserIds.length})
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleBulkValidateEmails}
+                  disabled={bulkValidating}
+                  className="inline-flex items-center px-3.5 py-2 bg-indigo-50 border border-indigo-200 text-indigo-700 font-semibold text-xs rounded-xl hover:bg-indigo-100 transition-colors shadow-xs disabled:opacity-50"
+                >
+                  {bulkValidating ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5 mr-1.5 text-indigo-600" />}
+                  Validate Emails ({selectedUserIds.length})
+                </button>
+                <button
+                  onClick={() => { setBulkDeleteReason(''); setBulkDeleteError(''); setIsBulkDeleteModalOpen(true); }}
+                  className="inline-flex items-center px-3.5 py-2 bg-rose-50 border border-rose-200 text-rose-700 font-semibold text-xs rounded-xl hover:bg-rose-100 transition-colors shadow-xs"
+                >
+                  <Trash2 className="w-3.5 h-3.5 mr-1.5 text-rose-600" />
+                  Request Deletion ({selectedUserIds.length})
+                </button>
+              </div>
             )}
 
             <button
@@ -352,188 +400,6 @@ export default function UsersPage() {
             </div>
           </div>
         </div>
-
-        {/* Expandable Filter Panel */}
-        {showFilters && (
-          <div className="p-4 bg-white border-b border-slate-100 space-y-4">
-            <div className="flex justify-between items-center mb-2">
-              <h3 className="text-sm font-semibold text-slate-800">Advanced Filters</h3>
-              <button 
-                onClick={() => setAdvancedFilters({
-                  city: '', state: '', country: '', institute: '', department: '', designation: '', 
-                  source: 'all', status: 'all', tag1: '', tag2: '', staff_code: '',
-                  is_deletion_requested: 'all', startDate: '', endDate: '',
-                  fromSNo: '', toSNo: ''
-                })}
-                className="text-xs text-indigo-600 hover:text-indigo-800 font-medium flex items-center"
-              >
-                <X className="w-3 h-3 mr-1" /> Clear All
-              </button>
-            </div>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {/* Serial Range Filter */}
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Serial Range (S.No.)</label>
-                <div className="flex items-center space-x-1.5">
-                  <input
-                    type="number"
-                    min="1"
-                    placeholder="From (e.g. 1)"
-                    value={advancedFilters.fromSNo}
-                    onChange={e => setAdvancedFilters({...advancedFilters, fromSNo: e.target.value})}
-                    className="block w-full border border-slate-300 rounded-lg shadow-sm py-1.5 px-2.5 text-xs focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                  />
-                  <span className="text-xs text-slate-400 font-medium">to</span>
-                  <input
-                    type="number"
-                    min="1"
-                    placeholder="To (e.g. 500)"
-                    value={advancedFilters.toSNo}
-                    onChange={e => setAdvancedFilters({...advancedFilters, toSNo: e.target.value})}
-                    className="block w-full border border-slate-300 rounded-lg shadow-sm py-1.5 px-2.5 text-xs focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                  />
-                </div>
-              </div>
-
-              {/* Status Select Filter */}
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Status</label>
-                <select
-                  value={advancedFilters.status}
-                  onChange={e => setAdvancedFilters({...advancedFilters, status: e.target.value})}
-                  className="block w-full border border-slate-300 rounded-lg shadow-sm py-1.5 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm font-medium"
-                >
-                  <option value="all">All Statuses</option>
-                  <option value="active">Active</option>
-                  <option value="unverified">Unverified</option>
-                </select>
-              </div>
-
-              {/* Country Text Filter */}
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Country</label>
-                <input
-                  type="text"
-                  placeholder="Filter by Country (e.g. India, USA)"
-                  value={advancedFilters.country}
-                  onChange={e => setAdvancedFilters({...advancedFilters, country: e.target.value})}
-                  className="block w-full border border-slate-300 rounded-lg shadow-sm py-1.5 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                />
-              </div>
-
-              {/* Tag 1 & Tag 2 Filters */}
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Tag 1</label>
-                <input
-                  type="text"
-                  value={advancedFilters.tag1}
-                  onChange={e => setAdvancedFilters({...advancedFilters, tag1: e.target.value})}
-                  className="block w-full border border-slate-300 rounded-lg shadow-sm py-1.5 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  placeholder="Filter by Tag 1"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Tag 2</label>
-                <input
-                  type="text"
-                  value={advancedFilters.tag2}
-                  onChange={e => setAdvancedFilters({...advancedFilters, tag2: e.target.value})}
-                  className="block w-full border border-slate-300 rounded-lg shadow-sm py-1.5 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  placeholder="Filter by Tag 2"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Staff Code</label>
-                <input
-                  type="text"
-                  value={advancedFilters.staff_code}
-                  onChange={e => setAdvancedFilters({...advancedFilters, staff_code: e.target.value})}
-                  className="block w-full border border-slate-300 rounded-lg shadow-sm py-1.5 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm font-mono"
-                  placeholder="e.g. ST01"
-                />
-              </div>
-
-              {/* Text Inputs */}
-              {[
-                { key: 'city', label: 'City' },
-                { key: 'state', label: 'State' },
-                { key: 'institute', label: 'Institute' },
-                { key: 'department', label: 'Department' },
-                { key: 'designation', label: 'Designation' }
-              ].map(field => (
-                <div key={field.key}>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">{field.label}</label>
-                  <input
-                    type="text"
-                    value={advancedFilters[field.key]}
-                    onChange={e => setAdvancedFilters({...advancedFilters, [field.key]: e.target.value})}
-                    className="block w-full border border-slate-300 rounded-lg shadow-sm py-1.5 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                    placeholder={`Any ${field.label.toLowerCase()}`}
-                  />
-                </div>
-              ))}
-
-              {/* Selects */}
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Source</label>
-                <select
-                  value={advancedFilters.source}
-                  onChange={e => setAdvancedFilters({...advancedFilters, source: e.target.value})}
-                  className="block w-full border border-slate-300 rounded-lg shadow-sm py-1.5 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                >
-                  <option value="all">All Sources</option>
-                  <option value="public_form">Public Form</option>
-                  <option value="import">Import</option>
-                  <option value="manual">Manual</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Deletion Status</label>
-                <select
-                  value={advancedFilters.is_deletion_requested}
-                  onChange={e => setAdvancedFilters({...advancedFilters, is_deletion_requested: e.target.value})}
-                  className="block w-full border border-slate-300 rounded-lg shadow-sm py-1.5 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                >
-                  <option value="all">All Status</option>
-                  <option value="0">Active</option>
-                  <option value="1">Deletion Requested</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Quick Date Presets Row */}
-            <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center gap-2">
-              <span className="text-xs font-semibold text-slate-600 flex items-center mr-1">
-                <Calendar className="w-3.5 h-3.5 mr-1 text-slate-400" /> Date Presets:
-              </span>
-              <button onClick={() => applyDatePreset('today')} className="px-2.5 py-1 text-xs bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 font-medium rounded-lg transition-colors text-slate-700">Today</button>
-              <button onClick={() => applyDatePreset('yesterday')} className="px-2.5 py-1 text-xs bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 font-medium rounded-lg transition-colors text-slate-700">Yesterday</button>
-              <button onClick={() => applyDatePreset('7d')} className="px-2.5 py-1 text-xs bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 font-medium rounded-lg transition-colors text-slate-700">Last 7 Days</button>
-              <button onClick={() => applyDatePreset('30d')} className="px-2.5 py-1 text-xs bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 font-medium rounded-lg transition-colors text-slate-700">Last 30 Days</button>
-              <button onClick={() => applyDatePreset('this_month')} className="px-2.5 py-1 text-xs bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 font-medium rounded-lg transition-colors text-slate-700">This Month</button>
-              
-              <div className="flex items-center space-x-2 ml-auto">
-                <input
-                  type="date"
-                  value={advancedFilters.startDate}
-                  onChange={e => setAdvancedFilters({...advancedFilters, startDate: e.target.value})}
-                  className="border border-slate-200 rounded-lg text-xs py-1 px-2 text-slate-700"
-                />
-                <span className="text-xs text-slate-400">to</span>
-                <input
-                  type="date"
-                  value={advancedFilters.endDate}
-                  onChange={e => setAdvancedFilters({...advancedFilters, endDate: e.target.value})}
-                  className="border border-slate-200 rounded-lg text-xs py-1 px-2 text-slate-700"
-                />
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Customer Table */}
         <div className="overflow-x-auto">
@@ -559,7 +425,7 @@ export default function UsersPage() {
                   <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
                   <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Tag 1</th>
                   <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Tag 2</th>
-                  <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Contact</th>
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Contact & Validation</th>
                   <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Location & Country</th>
                   <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Source</th>
                   <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Staff Code</th>
@@ -574,6 +440,9 @@ export default function UsersPage() {
                 ) : (
                   users.map((u, idx) => {
                     const rowSNo = u.sl_no || u.id;
+                    const valStatus = u.email_validation_status;
+                    const valReason = u.email_validation_reason;
+
                     return (
                       <tr key={u.id} className={`hover:bg-slate-50/80 transition-colors ${selectedUserIds.includes(u.id) ? 'bg-indigo-50/40' : ''}`}>
                         <td className="px-4 py-4 whitespace-nowrap text-center">
@@ -635,10 +504,43 @@ export default function UsersPage() {
                             <span className="text-slate-400 text-xs">-</span>
                           )}
                         </td>
+
+                        {/* CONTACT COLUMN WITH EMAIL VALIDATION */}
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-slate-900">{u.email || '-'}</div>
-                          <div className="text-sm text-slate-500">{u.country_code ? `${u.country_code} ` : ''}{u.mobile || '-'}</div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-sm font-semibold text-slate-900">{u.email || '-'}</span>
+                            {u.email && (
+                              <button
+                                onClick={() => handleValidateSingleEmail(u.id)}
+                                disabled={validatingUserIds.includes(u.id)}
+                                className="inline-flex items-center text-[10px] font-bold transition-all disabled:opacity-50"
+                                title={valReason || valStatus || 'Validate Email with MSG91'}
+                              >
+                                {validatingUserIds.includes(u.id) ? (
+                                  <Loader2 className="w-3 h-3 animate-spin text-indigo-600" />
+                                ) : valStatus === 'deliverable' ? (
+                                  <span className="inline-flex items-center gap-0.5 bg-emerald-100 text-emerald-800 border border-emerald-300 px-1.5 py-0.5 rounded-md text-[10px] font-bold">
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Deliverable
+                                  </span>
+                                ) : valStatus === 'undeliverable' ? (
+                                  <span className="inline-flex items-center gap-0.5 bg-rose-100 text-rose-800 border border-rose-300 px-1.5 py-0.5 rounded-md text-[10px] font-bold" title={valReason}>
+                                    <AlertCircle className="w-3 h-3 text-rose-600" /> Undeliverable {valReason ? `(${valReason})` : ''}
+                                  </span>
+                                ) : valStatus === 'risky' ? (
+                                  <span className="inline-flex items-center gap-0.5 bg-amber-100 text-amber-800 border border-amber-300 px-1.5 py-0.5 rounded-md text-[10px] font-bold">
+                                    <AlertTriangle className="w-3 h-3 text-amber-600" /> Risky
+                                  </span>
+                                ) : (
+                                  <span className="text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-1.5 py-0.5 rounded-md text-[10px] font-bold">
+                                    Validate
+                                  </span>
+                                )}
+                              </button>
+                            )}
+                          </div>
+                          <div className="text-xs text-slate-500 font-mono mt-0.5">{u.country_code ? `${u.country_code} ` : ''}{u.mobile || '-'}</div>
                         </td>
+
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-semibold text-slate-900">{u.city || '-'}</div>
                           <div className="text-xs text-slate-500">{u.country || u.region_type || '-'}</div>
@@ -680,57 +582,21 @@ export default function UsersPage() {
               <span className="font-semibold text-slate-900">{Math.min(page * limit, total)}</span> of{' '}
               <span className="font-semibold text-slate-900">{total}</span> customers
             </div>
-
-            {/* Custom Rows Per Page Dropdown */}
-            <div className="flex items-center space-x-2 border-l border-slate-200 pl-4">
-              <span className="text-xs font-semibold text-slate-500">Rows per page:</span>
-              <select
-                value={[10, 20, 50, 100, 200, 500, 1000].includes(limit) ? limit : 'custom'}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val === 'custom') {
-                    const input = prompt('Enter custom rows per page (1-5000):', limit);
-                    if (input) {
-                      const parsed = parseInt(input);
-                      if (!isNaN(parsed) && parsed > 0) {
-                        setLimit(Math.min(5000, parsed));
-                        setPage(1);
-                      }
-                    }
-                  } else {
-                    setLimit(parseInt(val));
-                    setPage(1);
-                  }
-                }}
-                className="px-2.5 py-1 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-500 focus:outline-none shadow-2xs"
-              >
-                <option value={10}>10 rows</option>
-                <option value={20}>20 rows</option>
-                <option value={50}>50 rows</option>
-                <option value={100}>100 rows</option>
-                <option value={200}>200 rows</option>
-                <option value={500}>500 rows</option>
-                <option value={1000}>1000 rows</option>
-                <option value="custom">Custom...</option>
-              </select>
-            </div>
           </div>
 
           <div className="flex items-center space-x-2">
             <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              onClick={() => setPage(p => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="p-2 border border-slate-200 rounded-xl bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="p-2 border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-100 disabled:opacity-40"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <span className="text-sm font-medium text-slate-700 px-2">
-              Page {page} of {totalPages}
-            </span>
+            <span className="text-xs font-semibold text-slate-700">Page {page} of {totalPages || 1}</span>
             <button
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages || totalPages === 0}
-              className="p-2 border border-slate-200 rounded-xl bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="p-2 border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-100 disabled:opacity-40"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -738,224 +604,59 @@ export default function UsersPage() {
         </div>
       </div>
 
-      {/* Add Customer Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl overflow-hidden">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-              <h3 className="text-lg font-bold text-slate-900">Add New Customer</h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
-              {createError && (
-                <div className="p-3 bg-rose-50 text-rose-600 text-xs rounded-xl border border-rose-100 flex items-center">
-                  <AlertTriangle className="w-4 h-4 mr-2 flex-shrink-0" />
-                  {createError}
-                </div>
-              )}
-
-              {/* Fuzzy Match Warning */}
-              {fuzzyCandidates && fuzzyCandidates.length > 0 && (
-                <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-3">
-                  <div className="flex items-start">
-                    <AlertTriangle className="w-5 h-5 text-amber-600 mr-2 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <h4 className="text-xs font-bold text-amber-900">Possible Similar Customer Found</h4>
-                      <p className="text-xs text-amber-700 mt-0.5">We found existing customers with similar details in the system:</p>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    {fuzzyCandidates.map((c, i) => (
-                      <div key={i} className="text-xs bg-white p-2.5 rounded-lg border border-amber-100 text-slate-700">
-                        <strong className="text-slate-900">{c.name}</strong> — {c.email || 'No email'} | {c.mobile || 'No mobile'} ({c.city || 'No city'})
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex justify-end space-x-2 pt-2">
-                    <button
-                      onClick={() => setFuzzyCandidates(null)}
-                      className="px-3 py-1.5 bg-white border border-amber-300 text-amber-800 text-xs font-medium rounded-lg hover:bg-amber-100"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => handleCreateSubmit(true)}
-                      className="px-3 py-1.5 bg-amber-600 text-white text-xs font-bold rounded-lg hover:bg-amber-700 shadow-xs"
-                    >
-                      Create Anyway (Override)
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Full Name *</label>
-                  <input
-                    type="text"
-                    required
-                    value={newUserData.name}
-                    onChange={(e) => setNewUserData({ ...newUserData, name: e.target.value })}
-                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                    placeholder="e.g. John Doe"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Status</label>
-                  <select
-                    value={newUserData.status}
-                    onChange={(e) => setNewUserData({ ...newUserData, status: e.target.value })}
-                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                  >
-                    <option value="active">active</option>
-                    <option value="unverified">unverified</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Email</label>
-                  <input
-                    type="email"
-                    value={newUserData.email}
-                    onChange={(e) => setNewUserData({ ...newUserData, email: e.target.value })}
-                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                    placeholder="john@example.com"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Mobile</label>
-                  <input
-                    type="text"
-                    value={newUserData.mobile}
-                    onChange={(e) => setNewUserData({ ...newUserData, mobile: e.target.value })}
-                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                    placeholder="9876543210"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">City</label>
-                  <input
-                    type="text"
-                    value={newUserData.city}
-                    onChange={(e) => setNewUserData({ ...newUserData, city: e.target.value })}
-                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                    placeholder="e.g. Mumbai"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Country</label>
-                  <input
-                    type="text"
-                    value={newUserData.country}
-                    onChange={(e) => setNewUserData({ ...newUserData, country: e.target.value })}
-                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                    placeholder="e.g. India, USA, UK"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Tag 1</label>
-                  <input
-                    type="text"
-                    value={newUserData.tag1}
-                    onChange={(e) => setNewUserData({ ...newUserData, tag1: e.target.value })}
-                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                    placeholder="e.g. VIP, Client"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Tag 2</label>
-                  <input
-                    type="text"
-                    value={newUserData.tag2}
-                    onChange={(e) => setNewUserData({ ...newUserData, tag2: e.target.value })}
-                    className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                    placeholder="e.g. Workshop2026"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end space-x-3">
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm font-semibold rounded-xl hover:bg-slate-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleCreateSubmit(false)}
-                disabled={createLoading || !newUserData.name}
-                className="px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-xl hover:bg-indigo-700 disabled:opacity-50 flex items-center shadow-xs"
-              >
-                {createLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />} Save Record
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Bulk Deletion Request Modal */}
+      {/* Bulk Delete Request Modal */}
       {isBulkDeleteModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-              <div className="flex items-center space-x-2 text-rose-600">
-                <Trash2 className="w-5 h-5" />
-                <h3 className="text-lg font-bold text-slate-900">Request Bulk Deletion</h3>
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <Trash2 className="w-5 h-5 text-rose-600" />
+                <h3 className="font-extrabold text-slate-900 text-base">Request Deletion ({selectedUserIds.length} Customers)</h3>
               </div>
               <button onClick={() => setIsBulkDeleteModalOpen(false)} className="text-slate-400 hover:text-slate-600">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
-              <p className="text-sm text-slate-600">
-                You are requesting deletion for <strong className="font-bold text-slate-900">{selectedUserIds.length}</strong> selected customer(s). Please provide a reason/remark for the administrator.
-              </p>
-
+            <form onSubmit={handleBulkDeleteSubmit} className="space-y-4 text-xs">
               {bulkDeleteError && (
-                <div className="p-3 bg-rose-50 text-rose-600 text-xs rounded-xl border border-rose-100 flex items-center">
-                  <AlertTriangle className="w-4 h-4 mr-2 flex-shrink-0" />
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs font-medium">
                   {bulkDeleteError}
                 </div>
               )}
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Reason / Remarks *</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Remarks / Reason for Deletion Request <span className="text-rose-500">*</span>
+                </label>
                 <textarea
-                  rows={3}
+                  required
+                  rows={4}
                   value={bulkDeleteReason}
                   onChange={(e) => setBulkDeleteReason(e.target.value)}
-                  className="w-full border border-slate-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-rose-500 focus:outline-none"
-                  placeholder="e.g. Duplicate records cleanup / Customer requested data removal..."
+                  placeholder="Provide explicit remarks explaining why deletion is requested..."
+                  className="w-full border border-slate-200 rounded-xl p-3 text-xs bg-slate-50 focus:bg-white focus:ring-2 focus:ring-rose-500 focus:outline-none"
                 />
               </div>
-            </div>
 
-            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end space-x-3">
-              <button
-                onClick={() => setIsBulkDeleteModalOpen(false)}
-                className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm font-semibold rounded-xl hover:bg-slate-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleBulkDeleteSubmit}
-                disabled={bulkDeleteLoading || !bulkDeleteReason.trim()}
-                className="px-4 py-2 bg-rose-600 text-white text-sm font-semibold rounded-xl hover:bg-rose-700 disabled:opacity-50 flex items-center shadow-xs"
-              >
-                {bulkDeleteLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />} Submit Request
-              </button>
-            </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsBulkDeleteModalOpen(false)}
+                  className="px-4 py-2 border border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={bulkDeleteLoading || !bulkDeleteReason.trim()}
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl disabled:opacity-50 flex items-center shadow-xs"
+                >
+                  {bulkDeleteLoading ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5 mr-1.5" />}
+                  Submit Deletion Request
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

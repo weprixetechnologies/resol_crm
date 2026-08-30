@@ -30,6 +30,26 @@ export default function UserDetailPage({ params }) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteReason, setDeleteReason] = useState('');
 
+  // MSG91 Email Validation State
+  const [validatingEmail, setValidatingEmail] = useState(false);
+  const handleValidateEmail = async () => {
+    if (!user?.email) return;
+    setValidatingEmail(true);
+    const res = await fetchApi(`/users/${id}/validate-email`, { method: 'POST' });
+    setValidatingEmail(false);
+    if (res.success && res.data?.validation) {
+      const val = res.data.validation;
+      setUser(prev => ({
+        ...prev,
+        email_validation_status: val.resultStatus,
+        email_validation_reason: val.reason,
+        email_validated_at: new Date().toISOString()
+      }));
+    } else {
+      alert(res.error?.message || 'Email validation failed');
+    }
+  };
+
   const loadData = async () => {
     setLoading(true);
     const res = await fetchApi(`/users/${id}`);
@@ -190,11 +210,39 @@ export default function UserDetailPage({ params }) {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-500 mb-1">Email</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-sm font-medium text-slate-500">Email & Deliverability</label>
+                    {user.email && !isEditing && (
+                      <button
+                        onClick={handleValidateEmail}
+                        disabled={validatingEmail}
+                        className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 disabled:opacity-50"
+                      >
+                        {validatingEmail ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Re-Validate'}
+                      </button>
+                    )}
+                  </div>
                   {isEditing ? (
                     <input type="email" value={editData.email} onChange={e => setEditData({...editData, email: e.target.value})} className="w-full border border-slate-300 rounded-lg p-2 focus:ring-indigo-500 focus:border-indigo-500" />
                   ) : (
-                    <div className="flex items-center text-slate-900 font-medium"><Mail className="w-4 h-4 mr-2 text-slate-400" />{user.email || 'N/A'}</div>
+                    <div className="flex flex-wrap items-center gap-2 text-slate-900 font-medium">
+                      <div className="flex items-center"><Mail className="w-4 h-4 mr-2 text-slate-400" />{user.email || 'N/A'}</div>
+                      {user.email_validation_status === 'deliverable' && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-emerald-100 text-emerald-800">
+                          Deliverable
+                        </span>
+                      )}
+                      {user.email_validation_status === 'undeliverable' && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-rose-100 text-rose-800" title={user.email_validation_reason}>
+                          Undeliverable {user.email_validation_reason ? `(${user.email_validation_reason})` : ''}
+                        </span>
+                      )}
+                      {user.email_validation_status === 'risky' && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-800">
+                          Risky
+                        </span>
+                      )}
+                    </div>
                   )}
                 </div>
 

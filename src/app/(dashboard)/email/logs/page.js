@@ -141,10 +141,12 @@ export default function EmailLogsPage() {
   }, [page]);
 
   // Bulk Selection Handlers
+  const selectableLogs = logs.filter(l => l.deletion_flag !== 'PENDING_DELETE' && l.deletion_flag !== 'CONTACT_DELETED');
+
   const handleSelectAll = (e) => {
     if (e.target.checked) {
-      const allCurrentIds = logs.map(l => l.id || l.crqid || l.requestId || l.imri).filter(Boolean);
-      setSelectedIds(allCurrentIds);
+      const allSelectableIds = selectableLogs.map(l => l.id || l.crqid || l.requestId || l.imri).filter(Boolean);
+      setSelectedIds(allSelectableIds);
     } else {
       setSelectedIds([]);
     }
@@ -405,11 +407,12 @@ export default function EmailLogsPage() {
                     <input
                       type="checkbox"
                       onChange={handleSelectAll}
-                      checked={logs.length > 0 && logs.every(l => selectedIds.includes(l.id || l.crqid || l.requestId || l.imri))}
-                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+                      checked={selectableLogs.length > 0 && selectableLogs.every(l => selectedIds.includes(l.id || l.crqid || l.requestId || l.imri))}
+                      disabled={selectableLogs.length === 0}
+                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 disabled:opacity-30"
                     />
                   </th>
-                  <th className="px-5 py-3.5">Recipient</th>
+                  <th className="px-5 py-3.5">Recipient & Deletion Status</th>
                   <th className="px-5 py-3.5">Subject & Template</th>
                   <th className="px-5 py-3.5">CRQID / MSG ID</th>
                   <th className="px-5 py-3.5 text-center">Status</th>
@@ -430,13 +433,15 @@ export default function EmailLogsPage() {
                   const status = log.status || 'QUEUED';
                   const failureReason = log.failure_reason || log.failureReason || log.error_message || log.description || null;
                   const createdAt = log.created_at || log.createdAt || log.statusUpdatedAt;
+                  const deletionFlag = log.deletion_flag || 'NONE';
 
                   const st = String(status).toUpperCase();
                   const isFailedOrRejected = st === 'FAILED' || st === 'REJECTED' || st === 'BOUNCED' || st === 'HARD_BOUNCE' || st === 'SOFT_BOUNCE';
                   
-                  // ONLY SHOW RED FAILURE BANNER IF STATUS IS FAILED/REJECTED/BOUNCED OR REASON IS NOT "OK"
                   const hasGenuineError = failureReason && failureReason.trim().toUpperCase() !== 'OK' && failureReason.trim() !== '200';
                   const showFailureBanner = (isFailedOrRejected || hasGenuineError) && st !== 'DELIVERED' && st !== 'OPENED' && st !== 'CLICKED';
+
+                  const isRowDisabled = deletionFlag === 'PENDING_DELETE' || deletionFlag === 'CONTACT_DELETED';
 
                   return (
                     <tr 
@@ -448,12 +453,29 @@ export default function EmailLogsPage() {
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => handleSelectRow(rowId)}
-                          className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+                          disabled={isRowDisabled}
+                          className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 disabled:opacity-30 disabled:cursor-not-allowed"
                         />
                       </td>
                       <td className="px-5 py-3.5">
                         <div className="font-bold text-slate-900">{recipientName}</div>
                         <div className="text-slate-500 font-mono text-[11px]">{recipientEmail}</div>
+
+                        {/* DELETION STATUS FLAGS */}
+                        {deletionFlag === 'PENDING_DELETE' && (
+                          <div className="mt-1">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-amber-100 text-amber-900 border border-amber-300">
+                              <AlertTriangle className="w-3 h-3 mr-1 text-amber-600" /> Pending Delete
+                            </span>
+                          </div>
+                        )}
+                        {deletionFlag === 'CONTACT_DELETED' && (
+                          <div className="mt-1">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-slate-100 text-slate-700 border border-slate-300">
+                              <Trash2 className="w-3 h-3 mr-1 text-slate-500" /> Contact Deleted
+                            </span>
+                          </div>
+                        )}
                       </td>
                       <td className="px-5 py-3.5 max-w-xs">
                         <div className="font-medium text-slate-900 truncate" title={subject}>{subject}</div>
