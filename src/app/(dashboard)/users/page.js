@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { fetchApi, api } from '@/lib/api';
 import Link from 'next/link';
-import { Search, Plus, ChevronLeft, ChevronRight, Loader2, UserPlus, Eye, AlertTriangle, Filter, X, Download, Trash2, Mail, Calendar, RefreshCw, CheckCircle2, AlertCircle, Check } from 'lucide-react';
+import { Search, Plus, ChevronLeft, ChevronRight, Loader2, UserPlus, Eye, AlertTriangle, Filter, X, Download, Trash2, Mail, Calendar, RefreshCw, CheckCircle2, AlertCircle, Check, ShieldAlert } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 export default function UsersPage() {
@@ -70,6 +70,7 @@ export default function UsersPage() {
   const [validatingUserIds, setValidatingUserIds] = useState([]);
   const [bulkValidating, setBulkValidating] = useState(false);
   const [validationMsg, setValidationMsg] = useState('');
+  const [isBulkValidateModalOpen, setIsBulkValidateModalOpen] = useState(false);
 
   // Modal State for New Customer Data
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -129,17 +130,25 @@ export default function UsersPage() {
     }
   };
 
-  const handleBulkValidateEmails = async () => {
-    if (selectedUserIds.length === 0) return;
+  const handleBulkValidateEmails = async (targetUserIds = null, validateAllUnvalidated = false) => {
+    const idsToValidate = targetUserIds || selectedUserIds;
+    if (!validateAllUnvalidated && idsToValidate.length === 0) return;
+
     setBulkValidating(true);
+    setIsBulkValidateModalOpen(false);
+
     const res = await fetchApi('/users/bulk-validate-email', {
       method: 'POST',
-      body: JSON.stringify({ userIds: selectedUserIds })
+      body: JSON.stringify({
+        userIds: idsToValidate,
+        validateAllUnvalidated
+      })
     });
+
     setBulkValidating(false);
 
     if (res.success) {
-      setValidationMsg(`Bulk Email Validation Complete: ${res.data?.totalValidated || selectedUserIds.length} customer email(s) processed.`);
+      setValidationMsg(res.message || `Bulk Email Validation Complete: ${res.data?.totalValidated || idsToValidate.length} customer email(s) processed.`);
       loadUsers();
       setTimeout(() => setValidationMsg(''), 5000);
     } else {
@@ -321,11 +330,20 @@ export default function UsersPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Customer Data</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Manage customers, email validation, staff codes, and deletion approvals.
+            Manage customers, MSG91 email validation, staff codes, and deletion approvals.
           </p>
         </div>
 
         <div className="flex items-center space-x-3">
+          <button
+            onClick={() => setIsBulkValidateModalOpen(true)}
+            disabled={bulkValidating}
+            className="inline-flex items-center px-4 py-2 border border-indigo-200 shadow-xs text-xs font-bold rounded-xl text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors disabled:opacity-50"
+          >
+            {bulkValidating ? <Loader2 className="w-4 h-4 mr-2 animate-spin text-indigo-600" /> : <CheckCircle2 className="w-4 h-4 mr-2 text-indigo-600" />}
+            Bulk Validate Emails
+          </button>
+
           <button
             onClick={handleExport}
             disabled={exporting || total === 0}
@@ -368,12 +386,12 @@ export default function UsersPage() {
             {selectedUserIds.length > 0 && (
               <div className="flex items-center gap-2">
                 <button
-                  onClick={handleBulkValidateEmails}
+                  onClick={() => handleBulkValidateEmails()}
                   disabled={bulkValidating}
                   className="inline-flex items-center px-3.5 py-2 bg-indigo-50 border border-indigo-200 text-indigo-700 font-semibold text-xs rounded-xl hover:bg-indigo-100 transition-colors shadow-xs disabled:opacity-50"
                 >
                   {bulkValidating ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5 mr-1.5 text-indigo-600" />}
-                  Validate Emails ({selectedUserIds.length})
+                  Validate Selected ({selectedUserIds.length})
                 </button>
                 <button
                   onClick={() => { setBulkDeleteReason(''); setBulkDeleteError(''); setIsBulkDeleteModalOpen(true); }}
@@ -776,6 +794,92 @@ export default function UsersPage() {
           </div>
         </div>
       </div>
+
+      {/* BULK VALIDATE EMAILS MODAL */}
+      {isBulkValidateModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-indigo-600" />
+                <h3 className="font-extrabold text-slate-900 text-base">Bulk Email Validation (MSG91)</h3>
+              </div>
+              <button onClick={() => setIsBulkValidateModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Select how you would like to run bulk email deliverability validation via MSG91 API:
+            </p>
+
+            <div className="space-y-3">
+              {/* Option 1: Selected Customers */}
+              {selectedUserIds.length > 0 && (
+                <button
+                  onClick={() => handleBulkValidateEmails(selectedUserIds, false)}
+                  disabled={bulkValidating}
+                  className="w-full p-3.5 bg-indigo-50 border border-indigo-200 rounded-xl text-left hover:bg-indigo-100 transition-colors flex items-start gap-3 group"
+                >
+                  <CheckCircle2 className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold text-indigo-900 text-xs block">
+                      Validate Selected Customers ({selectedUserIds.length})
+                    </span>
+                    <span className="text-[11px] text-indigo-700 block mt-0.5">
+                      Runs MSG91 validation for the {selectedUserIds.length} customer(s) selected with checkboxes.
+                    </span>
+                  </div>
+                </button>
+              )}
+
+              {/* Option 2: Current Page Customers */}
+              <button
+                onClick={() => handleBulkValidateEmails(users.map(u => u.id), false)}
+                disabled={bulkValidating || users.length === 0}
+                className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-left hover:bg-slate-100 transition-colors flex items-start gap-3 group"
+              >
+                <Mail className="w-4 h-4 text-slate-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold text-slate-900 text-xs block">
+                    Validate Current Page ({users.length} Customers)
+                  </span>
+                  <span className="text-[11px] text-slate-500 block mt-0.5">
+                    Validates email addresses for all customer records currently displayed on this page.
+                  </span>
+                </div>
+              </button>
+
+              {/* Option 3: All Unvalidated Customers */}
+              <button
+                onClick={() => handleBulkValidateEmails([], true)}
+                disabled={bulkValidating}
+                className="w-full p-3.5 bg-purple-50 border border-purple-200 rounded-xl text-left hover:bg-purple-100 transition-colors flex items-start gap-3 group"
+              >
+                <RefreshCw className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold text-purple-900 text-xs block">
+                    Validate All Unvalidated in CRM (Batch of 100)
+                  </span>
+                  <span className="text-[11px] text-purple-700 block mt-0.5">
+                    Automatically scans the CRM for customer records without email validation status and validates them in bulk.
+                  </span>
+                </div>
+              </button>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setIsBulkValidateModalOpen(false)}
+                className="px-4 py-2 border border-slate-200 text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-50"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Bulk Delete Request Modal */}
       {isBulkDeleteModalOpen && (
