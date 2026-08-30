@@ -401,6 +401,179 @@ export default function UsersPage() {
           </div>
         </div>
 
+        {/* Expandable Filter Panel */}
+        {showFilters && (
+          <div className="p-4 bg-white border-b border-slate-100 space-y-4">
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-sm font-semibold text-slate-800">Advanced Filters</h3>
+              <button 
+                onClick={() => setAdvancedFilters({
+                  city: '', state: '', country: '', institute: '', department: '', designation: '', 
+                  source: 'all', status: 'all', tag1: '', tag2: '', staff_code: '',
+                  is_deletion_requested: 'all', startDate: '', endDate: '',
+                  fromSNo: '', toSNo: ''
+                })}
+                className="text-xs text-indigo-600 hover:text-indigo-800 font-medium flex items-center"
+              >
+                <X className="w-3 h-3 mr-1" /> Clear All
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {/* Serial Range Filter */}
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Serial Range (S.No.)</label>
+                <div className="flex items-center space-x-1.5">
+                  <input
+                    type="number"
+                    placeholder="From"
+                    value={advancedFilters.fromSNo}
+                    onChange={e => setAdvancedFilters({...advancedFilters, fromSNo: e.target.value})}
+                    className="block w-full border border-slate-300 rounded-lg shadow-sm py-1.5 px-2.5 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-xs font-mono"
+                  />
+                  <span className="text-slate-400 text-xs">-</span>
+                  <input
+                    type="number"
+                    placeholder="To"
+                    value={advancedFilters.toSNo}
+                    onChange={e => setAdvancedFilters({...advancedFilters, toSNo: e.target.value})}
+                    className="block w-full border border-slate-300 rounded-lg shadow-sm py-1.5 px-2.5 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-xs font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Source Dropdown */}
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Source</label>
+                <select
+                  value={advancedFilters.source}
+                  onChange={e => setAdvancedFilters({...advancedFilters, source: e.target.value})}
+                  className="block w-full border border-slate-300 rounded-lg shadow-sm py-1.5 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-xs"
+                >
+                  <option value="all">All Sources</option>
+                  <option value="manual">Manual Entry</option>
+                  <option value="import">Excel Import</option>
+                  <option value="public_form">Public Form</option>
+                </select>
+              </div>
+
+              {/* Status Dropdown */}
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Status</label>
+                <select
+                  value={advancedFilters.status}
+                  onChange={e => setAdvancedFilters({...advancedFilters, status: e.target.value})}
+                  className="block w-full border border-slate-300 rounded-lg shadow-sm py-1.5 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-xs"
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="active">active</option>
+                  <option value="unverified">unverified</option>
+                </select>
+              </div>
+
+              {/* Deletion Requested Dropdown */}
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Deletion Status</label>
+                <select
+                  value={advancedFilters.is_deletion_requested}
+                  onChange={e => setAdvancedFilters({...advancedFilters, is_deletion_requested: e.target.value})}
+                  className="block w-full border border-slate-300 rounded-lg shadow-sm py-1.5 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-xs"
+                >
+                  <option value="all">All Records</option>
+                  <option value="0">Active Records</option>
+                  <option value="1">Pending Deletion</option>
+                </select>
+              </div>
+
+              {/* Tag 1 Filter */}
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Tag 1</label>
+                <input
+                  type="text"
+                  value={advancedFilters.tag1}
+                  onChange={e => setAdvancedFilters({...advancedFilters, tag1: e.target.value})}
+                  className="block w-full border border-slate-300 rounded-lg shadow-sm py-1.5 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-xs"
+                  placeholder="Filter by Tag 1"
+                />
+              </div>
+
+              {/* Tag 2 Filter */}
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Tag 2</label>
+                <input
+                  type="text"
+                  value={advancedFilters.tag2}
+                  onChange={e => setAdvancedFilters({...advancedFilters, tag2: e.target.value})}
+                  className="block w-full border border-slate-300 rounded-lg shadow-sm py-1.5 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-xs"
+                  placeholder="Filter by Tag 2"
+                />
+              </div>
+
+              {/* Staff Code Filter */}
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Staff Code</label>
+                <input
+                  type="text"
+                  value={advancedFilters.staff_code}
+                  onChange={e => setAdvancedFilters({...advancedFilters, staff_code: e.target.value})}
+                  className="block w-full border border-slate-300 rounded-lg shadow-sm py-1.5 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-xs font-mono"
+                  placeholder="e.g. ST01"
+                />
+              </div>
+
+              {/* Location & Details Filters */}
+              {[
+                { key: 'city', label: 'City' },
+                { key: 'state', label: 'State' },
+                { key: 'country', label: 'Country' },
+                { key: 'institute', label: 'Institute' },
+                { key: 'department', label: 'Department' },
+                { key: 'designation', label: 'Designation' }
+              ].map(field => (
+                <div key={field.key}>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">{field.label}</label>
+                  <input
+                    type="text"
+                    value={advancedFilters[field.key]}
+                    onChange={e => setAdvancedFilters({...advancedFilters, [field.key]: e.target.value})}
+                    className="block w-full border border-slate-300 rounded-lg shadow-sm py-1.5 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-xs"
+                    placeholder={`Filter by ${field.label}`}
+                  />
+                </div>
+              ))}
+            </div>
+
+            {/* Quick Date Presets Row */}
+            <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold text-slate-600 flex items-center mr-1">
+                <Calendar className="w-3.5 h-3.5 mr-1 text-slate-400" /> Date Presets:
+              </span>
+              <button onClick={() => applyDatePreset('today')} className="px-2.5 py-1 text-xs bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 font-medium rounded-lg transition-colors text-slate-700">Today</button>
+              <button onClick={() => applyDatePreset('yesterday')} className="px-2.5 py-1 text-xs bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 font-medium rounded-lg transition-colors text-slate-700">Yesterday</button>
+              <button onClick={() => applyDatePreset('7d')} className="px-2.5 py-1 text-xs bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 font-medium rounded-lg transition-colors text-slate-700">Last 7 Days</button>
+              <button onClick={() => applyDatePreset('30d')} className="px-2.5 py-1 text-xs bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 font-medium rounded-lg transition-colors text-slate-700">Last 30 Days</button>
+              <button onClick={() => applyDatePreset('this_month')} className="px-2.5 py-1 text-xs bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 font-medium rounded-lg transition-colors text-slate-700">This Month</button>
+              <button onClick={() => applyDatePreset('clear')} className="px-2.5 py-1 text-xs bg-slate-100 hover:bg-rose-50 hover:text-rose-600 font-medium rounded-lg transition-colors text-slate-500">Clear Dates</button>
+              
+              <div className="flex items-center space-x-2 ml-auto">
+                <input
+                  type="date"
+                  value={advancedFilters.startDate}
+                  onChange={e => setAdvancedFilters({...advancedFilters, startDate: e.target.value})}
+                  className="border border-slate-200 rounded-lg text-xs py-1 px-2 text-slate-700"
+                />
+                <span className="text-xs text-slate-400">to</span>
+                <input
+                  type="date"
+                  value={advancedFilters.endDate}
+                  onChange={e => setAdvancedFilters({...advancedFilters, endDate: e.target.value})}
+                  className="border border-slate-200 rounded-lg text-xs py-1 px-2 text-slate-700"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Customer Table */}
         <div className="overflow-x-auto">
           {loading ? (
