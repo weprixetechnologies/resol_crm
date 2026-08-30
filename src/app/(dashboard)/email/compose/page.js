@@ -66,16 +66,17 @@ function ComposeMailContent() {
   }, [searchParams]);
 
   const loadTemplates = async () => {
-    const res = await fetchApi('/mail/templates');
+    const res = await fetchApi('/email/templates');
     if (res.success) {
-      setTemplates(res.data);
+      const list = res.templates || res.data || [];
+      setTemplates(list);
       const urlTplId = searchParams.get('templateId');
       if (urlTplId) {
-        const found = res.data.find(t => t.id === parseInt(urlTplId));
+        const found = list.find(t => t.id === parseInt(urlTplId));
         if (found) {
           setSelectedTemplateId(found.id);
           setSubject(found.subject);
-          setBodyHtml(found.body_html);
+          setBodyHtml(found.body_html || found.body || '');
         }
       }
     }
@@ -223,7 +224,8 @@ function ComposeMailContent() {
       .filter(e => e.length > 0);
 
     const payload = {
-      templateId: selectedTemplateId ? parseInt(selectedTemplateId) : null,
+      crmTemplateId: selectedTemplateId ? parseInt(selectedTemplateId, 10) : null,
+      templateId: selectedTemplateId ? parseInt(selectedTemplateId, 10) : null,
       subject,
       body_html: bodyHtml,
       customEmails: parsedCustomEmails
@@ -243,7 +245,7 @@ function ComposeMailContent() {
       payload.customerIds = selectedCustomers.map(c => c.id);
     }
 
-    const res = await fetchApi('/mail/send', {
+    const res = await fetchApi('/email/send', {
       method: 'POST',
       body: JSON.stringify(payload)
     });
@@ -252,13 +254,14 @@ function ComposeMailContent() {
     if (res.success) {
       setSendResult({
         success: true,
-        data: res.data,
-        message: res.message || 'Mails queued for BullMQ background worker!'
+        data: res.data || res,
+        message: res.message || 'Mails queued or dispatched successfully!'
       });
     } else {
       setSendResult({
         success: false,
-        message: res.error?.message || 'Failed to send emails.'
+        code: res.code || res.error?.code,
+        message: res.message || res.error?.message || 'Failed to send emails.'
       });
     }
   };
@@ -428,9 +431,14 @@ function ComposeMailContent() {
                   className="border border-slate-300 rounded-xl py-1.5 px-3 text-xs font-medium focus:ring-2 focus:ring-indigo-500 bg-white"
                 >
                   <option value="">-- Choose Stored Template --</option>
-                  {templates.map(t => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
+                  {templates.map(t => {
+                    const statusStr = t.status || (t.canSend ? 'APPROVED' : 'PENDING');
+                    return (
+                      <option key={t.id} value={t.id}>
+                        {t.name} [{statusStr}]
+                      </option>
+                    );
+                  })}
                 </select>
                 <button
                   type="button"
@@ -491,23 +499,62 @@ function ComposeMailContent() {
               ></textarea>
             </div>
 
+            {/* Unapproved Template Warning Banner */}
+            {selectedTemplateId && (() => {
+              const selectedObj = templates.find(t => String(t.id) === String(selectedTemplateId));
+              if (selectedObj && !selectedObj.canSend && selectedObj.status !== 'APPROVED') {
+                const isRejected = selectedObj.status === 'REJECTED';
+                return (
+                  <div className={`p-4 rounded-xl border flex items-start space-x-3 text-xs font-semibold ${
+                    isRejected ? 'bg-rose-50 border-rose-200 text-rose-800' : 'bg-amber-50 border-amber-200 text-amber-800'
+                  }`}>
+                    <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-bold">
+                        {isRejected
+                          ? `Template "${selectedObj.name}" has been REJECTED by MSG91.`
+                          : `Template "${selectedObj.name}" is currently PENDING approval from MSG91.`}
+                      </p>
+                      <p className="text-[11px] font-normal mt-0.5">
+                        Emails cannot be sent using unapproved templates. Please wait for MSG91 approval or select an approved template.
+                      </p>
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })()}
+
             {/* Submit Button */}
             <div className="pt-2 flex justify-end">
-              <button
-                type="submit"
-                disabled={sending || (selectedCustomers.length === 0 && !customEmails)}
-                className="inline-flex items-center px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl shadow-md transition-all transform active:scale-95 disabled:opacity-50 uppercase tracking-wide"
-              >
-                {sending ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Sending Emails...
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-4 h-4 mr-2" /> SEND EMAIL DISPATCH
-                  </>
-                )}
-              </button>
+              {(() => {
+                const selectedObj = selectedTemplateId ? templates.find(t => String(t.id) === String(selectedTemplateId)) : null;
+                const isSendBlocked = Boolean(selectedObj && !selectedObj.canSend && selectedObj.status !== 'APPROVED');
+
+                return (
+                  <button
+                    type="submit"
+                    disabled={sending || isSendBlocked || (!sendToAllMatching && selectedCustomers.length === 0 && !customEmails)}
+                    className={`inline-flex items-center px-6 py-3 font-bold text-sm rounded-xl shadow-md transition-all transform active:scale-95 disabled:opacity-50 uppercase tracking-wide ${
+                      isSendBlocked ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                    }`}
+                  >
+                    {sending ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Sending Emails...
+                      </>
+                    ) : isSendBlocked ? (
+                      <>
+                        <X className="w-4 h-4 mr-2" /> SEND BLOCKED (TEMPLATE NOT APPROVED)
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4 mr-2" /> SEND EMAIL DISPATCH
+                      </>
+                    )}
+                  </button>
+                );
+              })()}
             </div>
           </div>
         </div>

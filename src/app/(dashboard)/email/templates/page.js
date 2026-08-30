@@ -126,9 +126,9 @@ export default function TemplatesPage() {
 
   const loadTemplates = async () => {
     setLoading(true);
-    const res = await fetchApi('/mail/templates');
+    const res = await fetchApi('/email/templates');
     if (res.success) {
-      setTemplates(res.data);
+      setTemplates(res.templates || res.data || []);
     }
     setLoading(false);
   };
@@ -137,27 +137,27 @@ export default function TemplatesPage() {
     loadTemplates();
   }, []);
 
-  const handleSyncTemplate = async (id) => {
+  const handleCheckStatus = async (id) => {
     setSyncingId(id);
-    const res = await fetchApi(`/mail/templates/${id}/sync-msg91`, { method: 'POST' });
+    const res = await fetchApi(`/email/templates/${id}/status`);
     setSyncingId(null);
     if (res.success) {
-      alert(`Template #${id} successfully synced to MSG91!\nMSG91 Slug: "${res.data?.msg91_slug || res.data?.msg91_template_id}"`);
+      alert(`Template #${id} Status: ${res.status}\nCan Send: ${res.canSend ? 'YES' : 'NO'}${res.msg91TemplateId ? '\nMSG91 Template ID: ' + res.msg91TemplateId : ''}`);
       loadTemplates();
     } else {
-      alert(`Sync failed: ${res.error?.message || 'Unknown error'}`);
+      alert(`Status check failed: ${res.error?.message || res.message || 'Unknown error'}`);
     }
   };
 
   const handleSyncAllTemplates = async () => {
     setSyncingAll(true);
-    const res = await fetchApi('/mail/templates/sync-all-msg91', { method: 'POST' });
+    const res = await fetchApi('/email/templates/sync-all-msg91', { method: 'POST' });
     setSyncingAll(false);
     if (res.success) {
-      alert(`Batch sync to MSG91 complete!\nSynced: ${Array.isArray(res.data) ? res.data.filter(r => r.status === 'synced').length : 0} templates.`);
+      alert(`Batch template status sync completed!`);
       loadTemplates();
     } else {
-      alert(`Batch sync failed: ${res.error?.message || 'Unknown error'}`);
+      alert(`Sync failed: ${res.error?.message || 'Unknown error'}`);
     }
   };
 
@@ -503,17 +503,20 @@ export default function TemplatesPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {templates.map(tpl => {
-              const msg91Slug = tpl.msg91_slug || tpl.msg91_template_id;
+              const status = tpl.status || (tpl.canSend ? 'APPROVED' : 'PENDING');
+              const isApproved = status === 'APPROVED' || tpl.canSend;
+              const isRejected = status === 'REJECTED';
               const isSyncing = syncingId === tpl.id;
+
               return (
                 <div key={tpl.id} className="border border-slate-200 rounded-2xl p-5 hover:border-indigo-300 transition-all shadow-xs flex flex-col justify-between bg-white">
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
-                        ID #{tpl.id}
+                        CRM ID #{tpl.id}
                       </span>
                       <span className="text-[11px] text-slate-400">
-                        {new Date(tpl.updated_at).toLocaleDateString()}
+                        {new Date(tpl.updated_at || tpl.updatedAt).toLocaleDateString()}
                       </span>
                     </div>
 
@@ -521,40 +524,63 @@ export default function TemplatesPage() {
                     <p className="text-xs text-slate-500 font-medium mb-2.5 line-clamp-1">Subject: {tpl.subject}</p>
 
                     {/* MSG91 Mapping Status Badge */}
-                    <div className="mb-3">
-                      {msg91Slug ? (
+                    <div className="mb-3 flex flex-wrap items-center gap-2">
+                      {isApproved ? (
                         <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          <Check className="w-3 h-3 mr-1" /> MSG91 Slug: {msg91Slug}
+                          <Check className="w-3 h-3 mr-1" /> Approved
+                        </span>
+                      ) : isRejected ? (
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                          ❌ Rejected
                         </span>
                       ) : (
                         <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                          ⚠️ Not Synced to MSG91
+                          ⏳ Pending Approval
+                        </span>
+                      )}
+
+                      {/* Surfacing MSG91 Template ID ONLY if Approved */}
+                      {isApproved && tpl.msg91TemplateId && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono bg-slate-100 text-slate-600 border border-slate-200">
+                          MSG91 ID: {tpl.msg91TemplateId}
                         </span>
                       )}
                     </div>
 
                     <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 h-24 overflow-hidden text-[11px] text-slate-600 font-mono mb-4 relative">
                       <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-slate-50 opacity-90 pointer-events-none"></div>
-                      {tpl.body_html.replace(/<[^>]*>?/gm, '')}
+                      {(tpl.body_html || tpl.body || '').replace(/<[^>]*>?/gm, '')}
                     </div>
                   </div>
 
                   <div className="flex items-center justify-between pt-3 border-t border-slate-100 gap-2">
                     <button
-                      onClick={() => handleSyncTemplate(tpl.id)}
+                      onClick={() => handleCheckStatus(tpl.id)}
                       disabled={isSyncing}
-                      className="inline-flex items-center px-2.5 py-1.5 bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 border border-slate-200 hover:border-emerald-200 font-semibold text-xs rounded-lg transition-colors disabled:opacity-50"
-                      title="Push/Sync Template to MSG91"
+                      className="inline-flex items-center px-2.5 py-1.5 bg-slate-100 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 border border-slate-200 hover:border-indigo-200 font-semibold text-xs rounded-lg transition-colors disabled:opacity-50"
+                      title="Check live approval status from MSG91"
                     >
                       {isSyncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 mr-1" />}
-                      {msg91Slug ? 'Re-Sync' : 'Sync MSG91'}
+                      Check Status
                     </button>
-                    <Link
-                      href={`/email/compose?templateId=${tpl.id}`}
-                      className="inline-flex items-center px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs rounded-lg transition-colors flex-1 justify-center"
-                    >
-                      <Send className="w-3.5 h-3.5 mr-1" /> Compose
-                    </Link>
+
+                    {isApproved ? (
+                      <Link
+                        href={`/email/compose?templateId=${tpl.id}`}
+                        className="inline-flex items-center px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs rounded-lg transition-colors flex-1 justify-center"
+                      >
+                        <Send className="w-3.5 h-3.5 mr-1" /> Compose
+                      </Link>
+                    ) : (
+                      <button
+                        disabled
+                        className="inline-flex items-center px-3 py-1.5 bg-slate-100 text-slate-400 cursor-not-allowed font-medium text-xs rounded-lg flex-1 justify-center border border-slate-200"
+                        title="Template must be APPROVED by MSG91 before sending"
+                      >
+                        Send Blocked
+                      </button>
+                    )}
+
                     <button
                       onClick={() => openEditEditor(tpl)}
                       className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition-colors"
