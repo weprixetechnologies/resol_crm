@@ -42,6 +42,7 @@ export default function SettingsPage() {
         msg91_domain: res.data.msg91_domain || '',
         msg91_from_email: res.data.msg91_from_email || '',
         msg91_from_name: res.data.msg91_from_name || 'RESOL CRM',
+        msg91_reply_to_email: res.data.msg91_reply_to_email || '',
         msg91_default_template_id: res.data.msg91_default_template_id || ''
       });
     }
@@ -304,7 +305,7 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">From Email Address</label>
                   <input
@@ -324,6 +325,17 @@ export default function SettingsPage() {
                     value={settings.msg91_from_name}
                     onChange={e => setSettings({ ...settings, msg91_from_name: e.target.value })}
                     className="block w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Reply-To Email Address</label>
+                  <input
+                    type="email"
+                    placeholder="e.g. reply@yourdomain.com"
+                    value={settings.msg91_reply_to_email || ''}
+                    onChange={e => setSettings({ ...settings, msg91_reply_to_email: e.target.value })}
+                    className="block w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent font-mono"
                   />
                 </div>
 
