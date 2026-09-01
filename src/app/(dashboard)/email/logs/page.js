@@ -32,6 +32,28 @@ export default function EmailLogsPage() {
   const [journeyData, setJourneyData] = useState(null);
   const [journeyLoading, setJourneyLoading] = useState(false);
 
+  // Rich Thread Reader Modal State
+  const [threadModalOpen, setThreadModalOpen] = useState(false);
+  const [selectedConversationMessages, setSelectedConversationMessages] = useState([]);
+  const [threadLoading, setThreadLoading] = useState(false);
+
+  const loadConversationThread = async (conversationId, singleMsg = null) => {
+    if (conversationId) {
+      setThreadLoading(true);
+      setThreadModalOpen(true);
+      const res = await fetchApi(`/email/conversations/${conversationId}/messages`);
+      setThreadLoading(false);
+      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+        setSelectedConversationMessages(res.data);
+      } else if (singleMsg) {
+        setSelectedConversationMessages([singleMsg]);
+      }
+    } else if (singleMsg) {
+      setSelectedConversationMessages([singleMsg]);
+      setThreadModalOpen(true);
+    }
+  };
+
   // BULK SELECTION STATE
   const [selectedIds, setSelectedIds] = useState([]);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -454,6 +476,58 @@ export default function EmailLogsPage() {
                 {logs.map((log, index) => {
                   const rowId = log.id || log.crqid || log.requestId || log.imri || index;
                   const isSelected = selectedIds.includes(rowId);
+                  
+                  if (activeTab === 'inbound_replies') {
+                    const senderName = log.from_name || log.from_email?.split('@')[0] || 'Customer';
+                    const senderEmail = log.from_email || '';
+                    const recipientEmail = log.to_email || 'journals@weprixe.in';
+                    const subject = log.subject || 'No Subject';
+                    const receivedAt = log.received_at || log.created_at;
+                    const atts = typeof log.attachments === 'string' ? JSON.parse(log.attachments || '[]') : (log.attachments || []);
+
+                    return (
+                      <tr key={rowId} className="hover:bg-emerald-50/40 transition-colors">
+                        <td className="px-4 py-3.5 text-center">
+                          <span className="h-2 w-2 rounded-full bg-emerald-500 inline-block"></span>
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <div className="font-bold text-slate-900">{senderName}</div>
+                          <div className="text-slate-500 font-mono text-[11px]">{senderEmail}</div>
+                        </td>
+                        <td className="px-5 py-3.5 max-w-xs">
+                          <div className="font-bold text-slate-900 truncate" title={subject}>{subject}</div>
+                          <div className="text-[11px] text-slate-500 truncate">To: {recipientEmail}</div>
+                          {Array.isArray(atts) && atts.length > 0 && (
+                            <div className="mt-1 text-[10px] font-bold text-indigo-600">
+                              📎 {atts.length} Attachment(s)
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-5 py-3.5 font-mono text-[11px] text-slate-600 whitespace-nowrap">
+                          <div className="truncate max-w-[140px]" title={log.message_id || log.provider_message_id}>
+                            {log.message_id || log.provider_message_id || '-'}
+                          </div>
+                        </td>
+                        <td className="px-5 py-3.5 whitespace-nowrap text-center">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-emerald-100 text-emerald-800 border border-emerald-300">
+                            ✓ Inbound Reply
+                          </span>
+                        </td>
+                        <td className="px-5 py-3.5 whitespace-nowrap text-slate-500 font-mono text-[11px]">
+                          {receivedAt ? new Date(receivedAt).toLocaleString() : '-'}
+                        </td>
+                        <td className="px-5 py-3.5 whitespace-nowrap text-right">
+                          <button
+                            onClick={() => loadConversationThread(log.conversation_id, log)}
+                            className="inline-flex items-center text-xs font-bold text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-xl border border-emerald-200 shadow-2xs transition-colors"
+                          >
+                            <Eye className="w-3.5 h-3.5 mr-1" /> Read Mail Thread
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  }
+
                   const recipientEmail = log.recipient_email || log.recipientEmail || '';
                   const recipientName = log.recipient_name || log.recipientName || 'Recipient';
                   const subject = log.subject || '';
@@ -529,11 +603,19 @@ export default function EmailLogsPage() {
                       <td className="px-5 py-3.5 whitespace-nowrap text-slate-500 font-mono text-[11px]">
                         {createdAt ? new Date(createdAt).toLocaleString() : '-'}
                       </td>
-                      <td className="px-5 py-3.5 whitespace-nowrap text-right">
+                      <td className="px-5 py-3.5 whitespace-nowrap text-right flex items-center justify-end gap-2">
+                        {log.conversation_id && (
+                          <button
+                            onClick={() => loadConversationThread(log.conversation_id, log)}
+                            className="inline-flex items-center text-xs font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-lg border border-indigo-200 transition-colors"
+                          >
+                            <Send className="w-3.5 h-3.5 mr-1 text-indigo-600" /> Mail Thread
+                          </button>
+                        )}
                         {activeTab === 'internal' ? (
                           <button
                             onClick={() => loadJourney(log.id)}
-                            className="inline-flex items-center text-xs font-bold text-indigo-600 hover:text-indigo-900 px-2.5 py-1 hover:bg-indigo-50 rounded-lg transition-colors"
+                            className="inline-flex items-center text-xs font-bold text-slate-700 hover:text-slate-900 px-2.5 py-1 hover:bg-slate-100 rounded-lg transition-colors"
                           >
                             <Eye className="w-3.5 h-3.5 mr-1" /> View Journey
                           </button>
@@ -543,7 +625,7 @@ export default function EmailLogsPage() {
                               setSelectedLogId(rowId);
                               setJourneyData({ log, timeline: log.timeline || [] });
                             }}
-                            className="inline-flex items-center text-xs font-bold text-indigo-600 hover:text-indigo-900 px-2.5 py-1 hover:bg-indigo-50 rounded-lg transition-colors"
+                            className="inline-flex items-center text-xs font-bold text-slate-700 hover:text-slate-900 px-2.5 py-1 hover:bg-slate-100 rounded-lg transition-colors"
                           >
                             <Eye className="w-3.5 h-3.5 mr-1" /> View Details
                           </button>
@@ -726,6 +808,112 @@ export default function EmailLogsPage() {
                     )}
                   </div>
                 </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* RICH EMAIL READER & CONVERSATION THREAD MODAL */}
+      {threadModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full p-6 space-y-5 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="font-extrabold text-slate-900 text-lg flex items-center gap-2">
+                  <Send className="w-5 h-5 text-indigo-600" />
+                  {selectedConversationMessages[0]?.subject || 'Email Conversation Thread'}
+                </h3>
+                <p className="text-xs text-slate-500 font-mono">
+                  {selectedConversationMessages.length} message(s) in this email thread
+                </p>
+              </div>
+              <button
+                onClick={() => { setThreadModalOpen(false); setSelectedConversationMessages([]); }}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {threadLoading ? (
+              <div className="flex justify-center items-center h-48">
+                <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {selectedConversationMessages.map((msg, idx) => {
+                  const isInbound = msg.direction === 'inbound';
+                  const atts = typeof msg.attachments === 'string' ? JSON.parse(msg.attachments || '[]') : (msg.attachments || []);
+                  return (
+                    <div
+                      key={msg.id || idx}
+                      className={`p-5 rounded-2xl border transition-all ${
+                        isInbound ? 'bg-emerald-50/70 border-emerald-200' : 'bg-indigo-50/70 border-indigo-200'
+                      }`}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2 mb-3 pb-2 border-b border-slate-200/60">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
+                              isInbound ? 'bg-emerald-600 text-white' : 'bg-indigo-600 text-white'
+                            }`}
+                          >
+                            {isInbound ? 'Inbound Reply' : 'Outbound Email'}
+                          </span>
+                          <span className="text-xs font-bold text-slate-900">
+                            {isInbound
+                              ? `From: ${msg.from_name ? `${msg.from_name} <${msg.from_email}>` : msg.from_email}`
+                              : `To: ${msg.to_name ? `${msg.to_name} <${msg.to_email}>` : msg.to_email}`}
+                          </span>
+                        </div>
+                        <span className="text-xs font-mono text-slate-500">
+                          {new Date(msg.received_at || msg.created_at).toLocaleString()}
+                        </span>
+                      </div>
+
+                      <div className="text-xs font-bold text-slate-800 mb-2">
+                        Subject: {msg.subject || 'No Subject'}
+                      </div>
+
+                      {msg.body_html ? (
+                        <div
+                          className="text-xs text-slate-800 bg-white p-4 rounded-xl border border-slate-200 max-h-72 overflow-y-auto leading-relaxed shadow-2xs"
+                          dangerouslySetInnerHTML={{ __html: msg.body_html }}
+                        />
+                      ) : (
+                        <p className="text-xs text-slate-800 bg-white p-4 rounded-xl border border-slate-200 whitespace-pre-wrap leading-relaxed shadow-2xs">
+                          {msg.body_text || 'No content.'}
+                        </p>
+                      )}
+
+                      {Array.isArray(atts) && atts.length > 0 && (
+                        <div className="mt-3 pt-2 border-t border-slate-200 flex flex-wrap gap-2">
+                          <span className="text-xs font-bold text-slate-500 flex items-center">
+                            Attachments:
+                          </span>
+                          {atts.map((a, aIdx) => (
+                            <a
+                              key={aIdx}
+                              href={a.url || '#'}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs font-bold text-indigo-600 hover:text-indigo-800 underline bg-white px-3 py-1 rounded-md border border-slate-200 shadow-2xs"
+                            >
+                              📎 {a.filename || `Attachment ${aIdx + 1}`}
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {selectedConversationMessages.length === 0 && (
+                  <div className="text-center py-12 text-slate-500 text-xs">
+                    No conversation history recorded for this email thread yet.
+                  </div>
+                )}
               </div>
             )}
           </div>
