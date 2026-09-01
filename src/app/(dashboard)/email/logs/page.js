@@ -64,6 +64,26 @@ export default function EmailLogsPage() {
         setTotal(0);
         setTotalPages(1);
       }
+    } else if (activeTab === 'inbound_replies') {
+      const query = new URLSearchParams({
+        page,
+        limit: 20,
+        search: search.trim()
+      });
+
+      const res = await fetchApi(`/email/inbound-replies?${query.toString()}`);
+      setLoading(false);
+
+      if (res.success) {
+        const data = res.data || res;
+        setLogs(data.items || []);
+        setTotal(data.total || 0);
+        setTotalPages(data.totalPages || 1);
+      } else {
+        setLogs([]);
+        setTotal(0);
+        setTotalPages(1);
+      }
     } else {
       // Fetch directly from MSG91 Live Logs API
       const query = new URLSearchParams({
@@ -291,7 +311,17 @@ export default function EmailLogsPage() {
               : 'border-transparent text-slate-500 hover:text-slate-700'
           }`}
         >
-          <History className="w-4 h-4" /> Internal CRM Email Logs
+          <History className="w-4 h-4" /> Internal Outbound Logs
+        </button>
+        <button
+          onClick={() => { setActiveTab('inbound_replies'); setPage(1); }}
+          className={`pb-3 px-4 font-bold text-xs flex items-center gap-2 border-b-2 transition-colors ${
+            activeTab === 'inbound_replies'
+              ? 'border-emerald-600 text-emerald-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <Send className="w-4 h-4 rotate-180 text-emerald-600" /> Incoming Replies (Inbound)
         </button>
         <button
           onClick={() => { setActiveTab('msg91_live'); setPage(1); }}
@@ -301,7 +331,7 @@ export default function EmailLogsPage() {
               : 'border-transparent text-slate-500 hover:text-slate-700'
           }`}
         >
-          <Server className="w-4 h-4" /> MSG91 Provider Direct Logs (3-Day)
+          <Server className="w-4 h-4" /> MSG91 Provider Direct Logs
         </button>
       </div>
 
