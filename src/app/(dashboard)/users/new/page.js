@@ -15,8 +15,8 @@ export default function NewUserForm() {
     designation: '',
     institute: '',
     department: '',
-    country: 'India',
-    region_type: 'India',
+    country: '',
+    region_type: '',
     country_code: '',
     status: 'active',
     tag1: '',
@@ -64,7 +64,7 @@ export default function NewUserForm() {
       setFormData({
         name: '', email: '', mobile: '', city: '', state: '', 
         designation: '', institute: '', department: '', 
-        region_type: 'indian', country_code: '', status: 'active',
+        country: '', region_type: '', country_code: '', status: 'active',
         tag1: '', tag2: '', remarks: ''
       });
     } catch (err) {

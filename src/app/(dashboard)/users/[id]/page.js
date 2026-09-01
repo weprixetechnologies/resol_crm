@@ -50,6 +50,8 @@ export default function UserDetailPage({ params }) {
     }
   };
 
+  const [emailMessages, setEmailMessages] = useState([]);
+
   const loadData = async () => {
     setLoading(true);
     const res = await fetchApi(`/users/${id}`);
@@ -58,6 +60,16 @@ export default function UserDetailPage({ params }) {
       setTimeline(res.data.timeline || []);
       setRemarks(res.data.remarks || []);
       setEditData(res.data.user);
+
+      // Load 2-Way Email Messages
+      try {
+        const actRes = await fetchApi(`/users/${id}/email-activity`);
+        if (actRes.success && Array.isArray(actRes.data?.messages)) {
+          setEmailMessages(actRes.data.messages);
+        }
+      } catch (aErr) {
+        console.warn('Failed to load email activity:', aErr.message);
+      }
     } else {
       setError(res.error?.message || 'Failed to load user details');
     }
@@ -443,6 +455,93 @@ export default function UserDetailPage({ params }) {
                 </ul>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Two-Way Email Messages & Thread History */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mt-6">
+        <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-slate-900 flex items-center">
+            <Mail className="w-5 h-5 mr-2 text-indigo-600" />
+            2-Way Email Communication History
+          </h3>
+          <span className="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+            {emailMessages.length} Message(s)
+          </span>
+        </div>
+        <div className="p-6">
+          <div className="space-y-4">
+            {emailMessages.map((msg) => {
+              const isInbound = msg.direction === 'inbound';
+              const atts = typeof msg.attachments === 'string' ? JSON.parse(msg.attachments || '[]') : (msg.attachments || []);
+              return (
+                <div
+                  key={msg.id}
+                  className={`p-4 rounded-2xl border transition-all ${
+                    isInbound ? 'bg-emerald-50/60 border-emerald-200' : 'bg-indigo-50/60 border-indigo-200'
+                  }`}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`text-[11px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
+                          isInbound ? 'bg-emerald-600 text-white' : 'bg-indigo-600 text-white'
+                        }`}
+                      >
+                        {isInbound ? 'Inbound Reply' : 'Outbound Email'}
+                      </span>
+                      <span className="text-xs font-bold text-slate-900">
+                        {isInbound ? `From: ${msg.from_name ? `${msg.from_name} <${msg.from_email}>` : msg.from_email}` : `To: ${msg.to_name ? `${msg.to_name} <${msg.to_email}>` : msg.to_email}`}
+                      </span>
+                    </div>
+                    <span className="text-xs font-mono text-slate-500">
+                      {new Date(msg.received_at || msg.created_at).toLocaleString()}
+                    </span>
+                  </div>
+
+                  <div className="text-xs font-bold text-slate-800 mb-1">
+                    Subject: {msg.subject || 'No Subject'}
+                  </div>
+
+                  {msg.body_html ? (
+                    <div
+                      className="text-xs text-slate-700 bg-white p-3 rounded-xl border border-slate-100 max-h-48 overflow-y-auto leading-relaxed"
+                      dangerouslySetInnerHTML={{ __html: msg.body_html }}
+                    ></div>
+                  ) : (
+                    <p className="text-xs text-slate-700 bg-white p-3 rounded-xl border border-slate-100 whitespace-pre-wrap leading-relaxed">
+                      {msg.body_text || 'No content.'}
+                    </p>
+                  )}
+
+                  {Array.isArray(atts) && atts.length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-slate-200 flex flex-wrap gap-2">
+                      <span className="text-[11px] font-bold text-slate-500 flex items-center">
+                        Attachments:
+                      </span>
+                      {atts.map((a, idx) => (
+                        <a
+                          key={idx}
+                          href={a.url || '#'}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 underline bg-white px-2 py-1 rounded-md border border-slate-200 shadow-2xs"
+                        >
+                          📎 {a.filename || `File ${idx + 1}`}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {emailMessages.length === 0 && (
+              <div className="text-xs text-slate-500 text-center py-6">
+                No 2-way email messages or replies recorded for this customer yet.
+              </div>
+            )}
           </div>
         </div>
       </div>

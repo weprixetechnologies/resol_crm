@@ -78,7 +78,7 @@ export default function UsersPage() {
 
   // Modal State for New Customer Data
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newUserData, setNewUserData] = useState({ name: '', email: '', mobile: '', city: '', country: 'India', status: 'active', tag1: '', tag2: '' });
+  const [newUserData, setNewUserData] = useState({ name: '', email: '', mobile: '', city: '', country: '', status: 'active', tag1: '', tag2: '' });
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState('');
   const [fuzzyCandidates, setFuzzyCandidates] = useState(null);
@@ -296,7 +296,7 @@ export default function UsersPage() {
 
     if (res.success) {
       setIsModalOpen(false);
-      setNewUserData({ name: '', email: '', mobile: '', city: '', country: 'India', status: 'active', tag1: '', tag2: '' });
+      setNewUserData({ name: '', email: '', mobile: '', city: '', country: '', status: 'active', tag1: '', tag2: '' });
       loadUsers();
     } else if (res.fuzzyCandidates) {
       setFuzzyCandidates(res.fuzzyCandidates);
