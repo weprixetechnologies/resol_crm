@@ -227,7 +227,7 @@ export default function TemplatesPage() {
 
   // Sync Blocks to body_html
   useEffect(() => {
-    if (activeTab === 'visual') {
+    if (activeTab === 'visual' && blocks && blocks.length > 0) {
       const compiled = compileBlocksToHtml(blocks);
       setForm(prev => ({ ...prev, body_html: compiled }));
     }
@@ -261,14 +261,15 @@ export default function TemplatesPage() {
 
     if (Array.isArray(parsedBlocks) && parsedBlocks.length > 0) {
       setBlocks(parsedBlocks);
-      setSelectedBlockId(parsedBlocks[0].id);
+      setSelectedBlockId(parsedBlocks[0]?.id || null);
       setActiveTab('visual');
     } else {
-      setBlocks(DEFAULT_BLOCKS);
+      setBlocks([]);
+      setSelectedBlockId(null);
       setActiveTab('code');
     }
 
-    setForm({ name: tpl.name, subject: tpl.subject, body_html: tpl.body_html });
+    setForm({ name: tpl.name || '', subject: tpl.subject || '', body_html: tpl.body_html || '' });
     setIsEditorOpen(true);
   };
 
