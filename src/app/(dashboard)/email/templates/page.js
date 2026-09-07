@@ -269,7 +269,8 @@ export default function TemplatesPage() {
       setActiveTab('code');
     }
 
-    setForm({ name: tpl.name || '', subject: tpl.subject || '', body_html: tpl.body_html || '' });
+    const rawContent = tpl.body_html || tpl.body || '';
+    setForm({ name: tpl.name || '', subject: tpl.subject || '', body_html: cleanHtmlCode(rawContent) });
     setIsEditorOpen(true);
   };
 
@@ -410,9 +411,18 @@ export default function TemplatesPage() {
     tag2: 'Conference Speaker'
   };
 
+  const cleanHtmlCode = (str) => {
+    if (!str) return '';
+    let s = String(str).trim();
+    if (s.startsWith('```')) {
+      s = s.replace(/^```[a-zA-Z]*\n?/, '').replace(/\n?```$/, '').trim();
+    }
+    return s;
+  };
+
   const getInterpolatedHtml = (html) => {
     if (!html) return '';
-    let result = html;
+    let result = cleanHtmlCode(html);
     Object.keys(sampleCustomer).forEach(key => {
       const regex = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, 'gi');
       result = result.replace(regex, sampleCustomer[key]);
@@ -550,7 +560,7 @@ export default function TemplatesPage() {
 
                     <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 h-24 overflow-hidden text-[11px] text-slate-600 font-mono mb-4 relative">
                       <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-slate-50 opacity-90 pointer-events-none"></div>
-                      {(tpl.body_html || tpl.body || '').replace(/<[^>]*>?/gm, '')}
+                      {cleanHtmlCode(tpl.body_html || tpl.body || '').replace(/<[^>]*>?/gm, '').trim()}
                     </div>
                   </div>
 
