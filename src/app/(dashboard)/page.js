@@ -95,6 +95,10 @@ export default function DashboardPage() {
     };
   });
 
+  const activeStaffCodes = selectedStaffCodes.length > 0 
+    ? selectedStaffCodes 
+    : (stats?.contactsCreatedStats?.staffBreakdown || []).map(s => s.staff_code);
+
   // Format contacts created chart data based on contactValue & contactUnit
   const contactChartData = (stats?.contactsCreatedStats?.chartData || []).map(item => {
     let dateStr = 'Unknown';
@@ -104,10 +108,17 @@ export default function DashboardPage() {
         ? format(parsedDate, 'HH:mm') 
         : format(parsedDate, 'MMM dd');
     }
-    return {
+    const formattedItem = {
+      ...item,
       date: dateStr,
-      count: item.count
+      count: Number(item.count) || 0
     };
+
+    activeStaffCodes.forEach(code => {
+      formattedItem[code] = Number(item[code]) || 0;
+    });
+
+    return formattedItem;
   });
 
   return (
@@ -354,14 +365,15 @@ export default function DashboardPage() {
                       itemStyle={{ fontWeight: 'bold' }}
                     />
                     <Legend wrapperStyle={{ paddingTop: '10px' }} />
-                    {selectedStaffCodes.length > 0 ? (
-                      selectedStaffCodes.map((code, idx) => (
+                    {activeStaffCodes.length > 0 ? (
+                      activeStaffCodes.map((code, idx) => (
                         <Bar
                           key={code}
                           dataKey={code}
                           name={code}
+                          stackId="a"
                           fill={STAFF_COLORS[idx % STAFF_COLORS.length]}
-                          radius={[4, 4, 0, 0]}
+                          radius={idx === activeStaffCodes.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
                         />
                       ))
                     ) : (
@@ -378,17 +390,18 @@ export default function DashboardPage() {
                       itemStyle={{ fontWeight: 'bold' }}
                     />
                     <Legend wrapperStyle={{ paddingTop: '10px' }} />
-                    {selectedStaffCodes.length > 0 ? (
-                      selectedStaffCodes.map((code, idx) => (
+                    {activeStaffCodes.length > 0 ? (
+                      activeStaffCodes.map((code, idx) => (
                         <Area
                           key={code}
                           type="monotone"
                           dataKey={code}
                           name={code}
+                          stackId="a"
                           stroke={STAFF_COLORS[idx % STAFF_COLORS.length]}
                           fill={STAFF_COLORS[idx % STAFF_COLORS.length]}
-                          fillOpacity={0.2}
-                          strokeWidth={2.5}
+                          fillOpacity={0.4}
+                          strokeWidth={2}
                         />
                       ))
                     ) : (
