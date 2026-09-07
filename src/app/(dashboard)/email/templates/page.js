@@ -259,7 +259,11 @@ export default function TemplatesPage() {
       console.error('Error parsing design_json:', e);
     }
 
-    if (Array.isArray(parsedBlocks) && parsedBlocks.length > 0) {
+    const rawContent = cleanHtmlCode(tpl.body_html || tpl.body || '');
+    const isCustomHtml = rawContent.includes('<!DOCTYPE') || rawContent.includes('<html') || rawContent.includes('<table') || (rawContent.length > 50 && !rawContent.includes('Welcome Aboard!'));
+    const hasDummyBlocks = Array.isArray(parsedBlocks) && parsedBlocks.some(b => b.title === 'Welcome Aboard!');
+
+    if (Array.isArray(parsedBlocks) && parsedBlocks.length > 0 && !hasDummyBlocks && !isCustomHtml) {
       setBlocks(parsedBlocks);
       setSelectedBlockId(parsedBlocks[0]?.id || null);
       setActiveTab('visual');
@@ -269,8 +273,7 @@ export default function TemplatesPage() {
       setActiveTab('code');
     }
 
-    const rawContent = tpl.body_html || tpl.body || '';
-    setForm({ name: tpl.name || '', subject: tpl.subject || '', body_html: cleanHtmlCode(rawContent) });
+    setForm({ name: tpl.name || '', subject: tpl.subject || '', body_html: rawContent });
     setIsEditorOpen(true);
   };
 
