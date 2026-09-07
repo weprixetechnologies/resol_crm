@@ -6,7 +6,8 @@ import { fetchApi } from '@/lib/api';
 import { 
   Send, Users, FileText, Sparkles, Plus, Check, Loader2, Search, 
   X, Eye, Tag, AlertCircle, CheckCircle2, History, Save, Filter,
-  CheckSquare, Square, ChevronLeft, ChevronRight, UserCheck, Shield, Building, MapPin
+  CheckSquare, Square, ChevronLeft, ChevronRight, UserCheck, Shield, Building, MapPin,
+  Calendar, ArrowUpDown, RotateCcw
 } from 'lucide-react';
 
 const DYNAMIC_TAGS = [
@@ -43,6 +44,24 @@ function ComposeMailContent() {
   const [sendToAllMatching, setSendToAllMatching] = useState(false);
   const [matchingCriteria, setMatchingCriteria] = useState(null);
   const [hoveredCustomer, setHoveredCustomer] = useState(null);
+
+  // Advanced Filter & Sorting State for Customer Modal
+  const [showModalAdvancedFilters, setShowModalAdvancedFilters] = useState(false);
+  const [modalFromSNo, setModalFromSNo] = useState('');
+  const [modalToSNo, setModalToSNo] = useState('');
+  const [modalStartDate, setModalStartDate] = useState('');
+  const [modalEndDate, setModalEndDate] = useState('');
+  const [modalCity, setModalCity] = useState('');
+  const [modalState, setModalState] = useState('');
+  const [modalCountry, setModalCountry] = useState('');
+  const [modalInstitute, setModalInstitute] = useState('');
+  const [modalDepartment, setModalDepartment] = useState('');
+  const [modalDesignation, setModalDesignation] = useState('');
+  const [modalStatus, setModalStatus] = useState('all');
+  const [modalSource, setModalSource] = useState('all');
+  const [modalTag2, setModalTag2] = useState('');
+  const [modalSortBy, setModalSortBy] = useState('sl_no');
+  const [modalSortOrder, setModalSortOrder] = useState('DESC');
 
   // Template & Content State
   const [templates, setTemplates] = useState([]);
@@ -106,12 +125,109 @@ function ComposeMailContent() {
     }
   };
 
-  const fetchModalCustomers = async (p = 1, s = modalSearch, staff = modalStaffFilter, tag = modalTagFilter) => {
+  const applyModalDatePreset = (preset) => {
+    const today = new Date();
+    const formatDate = (d) => {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+    
+    if (preset === 'today') {
+      const dateStr = formatDate(today);
+      setModalStartDate(dateStr); setModalEndDate(dateStr);
+    } else if (preset === 'yesterday') {
+      const y = new Date(today);
+      y.setDate(y.getDate() - 1);
+      const dateStr = formatDate(y);
+      setModalStartDate(dateStr); setModalEndDate(dateStr);
+    } else if (preset === '7d') {
+      const d7 = new Date(today);
+      d7.setDate(d7.getDate() - 6);
+      setModalStartDate(formatDate(d7)); setModalEndDate(formatDate(today));
+    } else if (preset === '30d') {
+      const d30 = new Date(today);
+      d30.setDate(d30.getDate() - 29);
+      setModalStartDate(formatDate(d30)); setModalEndDate(formatDate(today));
+    } else if (preset === 'this_month') {
+      const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+      setModalStartDate(formatDate(startOfMonth)); setModalEndDate(formatDate(today));
+    } else if (preset === 'clear') {
+      setModalStartDate(''); setModalEndDate('');
+    }
+  };
+
+  const clearAllModalFilters = () => {
+    setModalSearch('');
+    setModalStaffFilter('all');
+    setModalTagFilter('all');
+    setModalFromSNo('');
+    setModalToSNo('');
+    setModalStartDate('');
+    setModalEndDate('');
+    setModalCity('');
+    setModalState('');
+    setModalCountry('');
+    setModalInstitute('');
+    setModalDepartment('');
+    setModalDesignation('');
+    setModalStatus('all');
+    setModalSource('all');
+    setModalTag2('');
+    setModalSortBy('sl_no');
+    setModalSortOrder('DESC');
+  };
+
+  const getModalFilterCriteria = () => {
+    const criteria = {};
+    if (modalSearch && modalSearch.trim()) criteria.search = modalSearch.trim();
+    if (modalStaffFilter && modalStaffFilter !== 'all') criteria.staff_code = modalStaffFilter;
+    if (modalTagFilter && modalTagFilter !== 'all') criteria.tag1 = modalTagFilter;
+    if (modalTag2 && modalTag2.trim()) criteria.tag2 = modalTag2.trim();
+    if (modalFromSNo) criteria.fromSNo = modalFromSNo;
+    if (modalToSNo) criteria.toSNo = modalToSNo;
+    if (modalStartDate) criteria.startDate = modalStartDate;
+    if (modalEndDate) criteria.endDate = modalEndDate;
+    if (modalCity && modalCity.trim()) criteria.city = modalCity.trim();
+    if (modalState && modalState.trim()) criteria.state = modalState.trim();
+    if (modalCountry && modalCountry.trim()) criteria.country = modalCountry.trim();
+    if (modalInstitute && modalInstitute.trim()) criteria.institute = modalInstitute.trim();
+    if (modalDepartment && modalDepartment.trim()) criteria.department = modalDepartment.trim();
+    if (modalDesignation && modalDesignation.trim()) criteria.designation = modalDesignation.trim();
+    if (modalStatus && modalStatus !== 'all') criteria.status = modalStatus;
+    if (modalSource && modalSource !== 'all') criteria.source = modalSource;
+    if (modalSortBy) criteria.sortBy = modalSortBy;
+    if (modalSortOrder) criteria.sortOrder = modalSortOrder;
+    return criteria;
+  };
+
+  const activeModalFilterCount = [
+    modalFromSNo, modalToSNo, modalStartDate, modalEndDate, modalCity, modalState, modalCountry,
+    modalInstitute, modalDepartment, modalDesignation, modalTag2
+  ].filter(Boolean).length + (modalStatus !== 'all' ? 1 : 0) + (modalSource !== 'all' ? 1 : 0) + (modalTagFilter !== 'all' ? 1 : 0) + (modalStaffFilter !== 'all' ? 1 : 0);
+
+  const fetchModalCustomers = async (p = 1) => {
     setModalLoading(true);
     let url = `/users?page=${p}&limit=50`;
-    if (s && s.trim()) url += `&search=${encodeURIComponent(s.trim())}`;
-    if (staff && staff !== 'all') url += `&staff_code=${encodeURIComponent(staff)}`;
-    if (tag && tag !== 'all') url += `&tag1=${encodeURIComponent(tag)}`;
+    if (modalSearch && modalSearch.trim()) url += `&search=${encodeURIComponent(modalSearch.trim())}`;
+    if (modalStaffFilter && modalStaffFilter !== 'all') url += `&staff_code=${encodeURIComponent(modalStaffFilter)}`;
+    if (modalTagFilter && modalTagFilter !== 'all') url += `&tag1=${encodeURIComponent(modalTagFilter)}`;
+    if (modalTag2 && modalTag2.trim()) url += `&tag2=${encodeURIComponent(modalTag2.trim())}`;
+    if (modalFromSNo) url += `&fromSNo=${encodeURIComponent(modalFromSNo)}`;
+    if (modalToSNo) url += `&toSNo=${encodeURIComponent(modalToSNo)}`;
+    if (modalStartDate) url += `&startDate=${encodeURIComponent(modalStartDate)}`;
+    if (modalEndDate) url += `&endDate=${encodeURIComponent(modalEndDate)}`;
+    if (modalCity && modalCity.trim()) url += `&city=${encodeURIComponent(modalCity.trim())}`;
+    if (modalState && modalState.trim()) url += `&state=${encodeURIComponent(modalState.trim())}`;
+    if (modalCountry && modalCountry.trim()) url += `&country=${encodeURIComponent(modalCountry.trim())}`;
+    if (modalInstitute && modalInstitute.trim()) url += `&institute=${encodeURIComponent(modalInstitute.trim())}`;
+    if (modalDepartment && modalDepartment.trim()) url += `&department=${encodeURIComponent(modalDepartment.trim())}`;
+    if (modalDesignation && modalDesignation.trim()) url += `&designation=${encodeURIComponent(modalDesignation.trim())}`;
+    if (modalStatus && modalStatus !== 'all') url += `&status=${encodeURIComponent(modalStatus)}`;
+    if (modalSource && modalSource !== 'all') url += `&source=${encodeURIComponent(modalSource)}`;
+    if (modalSortBy) url += `&sortBy=${encodeURIComponent(modalSortBy)}`;
+    if (modalSortOrder) url += `&sortOrder=${encodeURIComponent(modalSortOrder)}`;
 
     const res = await fetchApi(url);
     if (res.success && res.data) {
@@ -125,17 +241,22 @@ function ComposeMailContent() {
 
   const openCustomerModal = () => {
     setIsCustomerModalOpen(true);
-    fetchModalCustomers(1, modalSearch, modalStaffFilter, modalTagFilter);
+    fetchModalCustomers(1);
   };
 
-  // Debounced search trigger for server-side search across 12,000+ customers
+  // Debounced search trigger for server-side search across all records
   useEffect(() => {
     if (!isCustomerModalOpen) return;
     const timer = setTimeout(() => {
-      fetchModalCustomers(1, modalSearch, modalStaffFilter, modalTagFilter);
+      fetchModalCustomers(1);
     }, 300);
     return () => clearTimeout(timer);
-  }, [modalSearch, modalStaffFilter, modalTagFilter, isCustomerModalOpen]);
+  }, [
+    modalSearch, modalStaffFilter, modalTagFilter, modalTag2, modalFromSNo, modalToSNo,
+    modalStartDate, modalEndDate, modalCity, modalState, modalCountry, modalInstitute,
+    modalDepartment, modalDesignation, modalStatus, modalSource, modalSortBy, modalSortOrder,
+    isCustomerModalOpen
+  ]);
 
   const handleTemplateSelect = (tplId) => {
     setSelectedTemplateId(tplId);
@@ -232,14 +353,10 @@ function ComposeMailContent() {
     };
 
     if (sendToAllMatching) {
-      if (!modalSearch && modalStaffFilter === 'all' && modalTagFilter === 'all') {
-        payload.sendToAll = true;
-      } else {
-        payload.filterCriteria = {
-          search: modalSearch,
-          staff_code: modalStaffFilter,
-          tag1: modalTagFilter
-        };
+      const criteria = getModalFilterCriteria();
+      payload.sendToAll = true;
+      if (Object.keys(criteria).length > 0) {
+        payload.filterCriteria = criteria;
       }
     } else {
       payload.customerIds = selectedCustomers.map(c => c.id);
@@ -280,11 +397,7 @@ function ComposeMailContent() {
 
   const selectAllMatchingInCRM = () => {
     setSendToAllMatching(true);
-    setMatchingCriteria({
-      search: modalSearch,
-      staff_code: modalStaffFilter,
-      tag1: modalTagFilter
-    });
+    setMatchingCriteria(getModalFilterCriteria());
   };
 
   const deselectAllModal = () => {
@@ -643,19 +756,19 @@ function ComposeMailContent() {
 
             {/* Modal Controls & Filters */}
             <div className="p-4 bg-white border-b border-slate-200 space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="relative sm:col-span-2">
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                <div className="relative sm:col-span-6">
                   <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                   <input
                     type="text"
-                    placeholder="Search name, email, institute, city, staff code across all 12,000+ records..."
+                    placeholder="Search name, email, institute, city, staff code across all records..."
                     value={modalSearch}
                     onChange={e => setModalSearch(e.target.value)}
                     className="w-full pl-9 pr-3 py-1.5 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 font-medium"
                   />
                 </div>
 
-                <div>
+                <div className="sm:col-span-3">
                   <input
                     type="text"
                     placeholder="Filter by Staff Code (e.g. ST01)..."
@@ -664,7 +777,192 @@ function ComposeMailContent() {
                     className="w-full border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-mono text-slate-700 bg-white"
                   />
                 </div>
+
+                <div className="sm:col-span-3 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowModalAdvancedFilters(!showModalAdvancedFilters)}
+                    className={`w-full py-1.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center border cursor-pointer ${
+                      showModalAdvancedFilters || activeModalFilterCount > 0
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    <Filter className="w-3.5 h-3.5 mr-1.5" />
+                    Advanced Filters
+                    {activeModalFilterCount > 0 && (
+                      <span className="ml-1.5 bg-white text-indigo-700 rounded-full px-1.5 py-0.2 text-[10px] font-extrabold">
+                        {activeModalFilterCount}
+                      </span>
+                    )}
+                  </button>
+                </div>
               </div>
+
+              {/* Expandable Advanced Filters & Sorting Drawer */}
+              {showModalAdvancedFilters && (
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-3 text-xs animate-in fade-in slide-in-from-top-1 duration-200">
+                  {/* Sorting Bar */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-slate-200">
+                    <div className="flex items-center space-x-2">
+                      <ArrowUpDown className="w-3.5 h-3.5 text-indigo-600" />
+                      <span className="font-bold text-slate-700">Sort By:</span>
+                      <select
+                        value={modalSortBy}
+                        onChange={e => setModalSortBy(e.target.value)}
+                        className="border border-slate-300 rounded-lg px-2.5 py-1 bg-white text-slate-800 font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-500 text-xs"
+                      >
+                        <option value="sl_no">Serial No (S.No)</option>
+                        <option value="created_at">Date Created</option>
+                        <option value="name">Customer Name</option>
+                        <option value="email">Email Address</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => setModalSortOrder(prev => prev === 'ASC' ? 'DESC' : 'ASC')}
+                        className="px-2.5 py-1 bg-white border border-slate-300 rounded-lg font-bold text-slate-700 hover:bg-slate-100 flex items-center text-xs"
+                      >
+                        {modalSortOrder === 'ASC' ? '↑ ASC' : '↓ DESC'}
+                      </button>
+                    </div>
+
+                    {activeModalFilterCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={clearAllModalFilters}
+                        className="text-rose-600 hover:text-rose-800 font-semibold text-xs flex items-center ml-auto bg-rose-50 border border-rose-200 px-2.5 py-1 rounded-lg transition-colors"
+                      >
+                        <RotateCcw className="w-3 h-3 mr-1" /> Reset Filters
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Ranges & Additional Filters Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    {/* Serial Range */}
+                    <div className="bg-white p-2.5 rounded-lg border border-slate-200">
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Serial Range (S.No)</label>
+                      <div className="flex items-center space-x-1.5">
+                        <input
+                          type="number"
+                          placeholder="From"
+                          value={modalFromSNo}
+                          onChange={e => setModalFromSNo(e.target.value)}
+                          className="w-full border border-slate-200 rounded-md px-2 py-1 text-slate-800 text-xs font-mono"
+                        />
+                        <span className="text-slate-400 font-bold">-</span>
+                        <input
+                          type="number"
+                          placeholder="To"
+                          value={modalToSNo}
+                          onChange={e => setModalToSNo(e.target.value)}
+                          className="w-full border border-slate-200 rounded-md px-2 py-1 text-slate-800 text-xs font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Tag Filters */}
+                    <div className="bg-white p-2.5 rounded-lg border border-slate-200">
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Tags (Tag 1 / Tag 2)</label>
+                      <div className="flex items-center space-x-1.5">
+                        <input
+                          type="text"
+                          placeholder="Tag 1"
+                          value={modalTagFilter === 'all' ? '' : modalTagFilter}
+                          onChange={e => setModalTagFilter(e.target.value.trim() || 'all')}
+                          className="w-full border border-slate-200 rounded-md px-2 py-1 text-slate-800 text-xs"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Tag 2"
+                          value={modalTag2}
+                          onChange={e => setModalTag2(e.target.value)}
+                          className="w-full border border-slate-200 rounded-md px-2 py-1 text-slate-800 text-xs"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Status & Source */}
+                    <div className="bg-white p-2.5 rounded-lg border border-slate-200">
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Status & Source</label>
+                      <div className="flex items-center space-x-1.5">
+                        <select
+                          value={modalStatus}
+                          onChange={e => setModalStatus(e.target.value)}
+                          className="w-full border border-slate-200 rounded-md px-1.5 py-1 text-slate-800 text-xs bg-white"
+                        >
+                          <option value="all">All Status</option>
+                          <option value="active">Active</option>
+                          <option value="unverified">Unverified</option>
+                        </select>
+                        <select
+                          value={modalSource}
+                          onChange={e => setModalSource(e.target.value)}
+                          className="w-full border border-slate-200 rounded-md px-1.5 py-1 text-slate-800 text-xs bg-white"
+                        >
+                          <option value="all">All Sources</option>
+                          <option value="import">Import</option>
+                          <option value="public_form">Public Form</option>
+                          <option value="manual">Manual</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* City & Country */}
+                    <div className="bg-white p-2.5 rounded-lg border border-slate-200">
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">City & Country</label>
+                      <div className="flex items-center space-x-1.5">
+                        <input
+                          type="text"
+                          placeholder="City"
+                          value={modalCity}
+                          onChange={e => setModalCity(e.target.value)}
+                          className="w-full border border-slate-200 rounded-md px-2 py-1 text-slate-800 text-xs"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Country"
+                          value={modalCountry}
+                          onChange={e => setModalCountry(e.target.value)}
+                          className="w-full border border-slate-200 rounded-md px-2 py-1 text-slate-800 text-xs"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Date Created Range Row */}
+                  <div className="bg-white p-2.5 rounded-lg border border-slate-200 space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-[11px] font-bold text-slate-700 flex items-center">
+                        <Calendar className="w-3.5 h-3.5 mr-1 text-indigo-600" /> Date Created Range:
+                      </span>
+                      <div className="flex flex-wrap items-center gap-1">
+                        <button type="button" onClick={() => applyModalDatePreset('today')} className="px-2 py-0.5 text-[10px] bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 font-medium rounded transition-colors">Today</button>
+                        <button type="button" onClick={() => applyModalDatePreset('yesterday')} className="px-2 py-0.5 text-[10px] bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 font-medium rounded transition-colors">Yesterday</button>
+                        <button type="button" onClick={() => applyModalDatePreset('7d')} className="px-2 py-0.5 text-[10px] bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 font-medium rounded transition-colors">Last 7 Days</button>
+                        <button type="button" onClick={() => applyModalDatePreset('30d')} className="px-2 py-0.5 text-[10px] bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 font-medium rounded transition-colors">Last 30 Days</button>
+                        <button type="button" onClick={() => applyModalDatePreset('this_month')} className="px-2 py-0.5 text-[10px] bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 font-medium rounded transition-colors">This Month</button>
+                        <button type="button" onClick={() => applyModalDatePreset('clear')} className="px-2 py-0.5 text-[10px] bg-slate-100 hover:bg-rose-50 hover:text-rose-600 font-medium rounded text-slate-500 transition-colors">Clear Dates</button>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="date"
+                        value={modalStartDate}
+                        onChange={e => setModalStartDate(e.target.value)}
+                        className="border border-slate-200 rounded-md text-xs py-1 px-2 text-slate-800 bg-white"
+                      />
+                      <span className="text-xs text-slate-400 font-bold">to</span>
+                      <input
+                        type="date"
+                        value={modalEndDate}
+                        onChange={e => setModalEndDate(e.target.value)}
+                        className="border border-slate-200 rounded-md text-xs py-1 px-2 text-slate-800 bg-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Action & Pagination Toolbar */}
               <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
@@ -774,6 +1072,9 @@ function ComposeMailContent() {
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center space-x-2">
                               <span className="font-bold text-slate-900 text-sm truncate">{cust.name}</span>
+                              <span className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-indigo-50 text-indigo-700 rounded border border-indigo-100">
+                                S.No. {cust.sl_no || cust.id}
+                              </span>
                               {cust.created_by_code && (
                                 <span className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-slate-100 text-slate-600 rounded">
                                   {cust.created_by_code}
@@ -784,6 +1085,12 @@ function ComposeMailContent() {
                             <div className="text-xs text-slate-600 font-mono truncate">{cust.email || '(No Email Registered)'}</div>
                             
                             <div className="text-[11px] text-slate-500 mt-1 flex flex-wrap gap-2 items-center">
+                              {cust.created_at && (
+                                <span className="flex items-center text-slate-600 font-mono text-[10px]">
+                                  <Calendar className="w-3 h-3 mr-0.5 text-slate-400" />
+                                  {new Date(cust.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                                </span>
+                              )}
                               {cust.institute && <span className="flex items-center"><Building className="w-3 h-3 mr-0.5 text-slate-400" />{cust.institute}</span>}
                               {cust.city && <span className="flex items-center"><MapPin className="w-3 h-3 mr-0.5 text-slate-400" />{cust.city}</span>}
                             </div>

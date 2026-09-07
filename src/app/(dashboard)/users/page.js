@@ -720,13 +720,14 @@ export default function UsersPage() {
                   <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Location & Country</th>
                   <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Source</th>
                   <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Staff Code</th>
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Created Date</th>
                   <th scope="col" className="relative px-6 py-4"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-slate-100">
                 {users.length === 0 ? (
                   <tr>
-                    <td colSpan="11" className="px-6 py-12 text-center text-slate-500">No customer data found.</td>
+                    <td colSpan="12" className="px-6 py-12 text-center text-slate-500">No customer data found.</td>
                   </tr>
                 ) : (
                   users.map((u, idx) => {
@@ -839,6 +840,16 @@ export default function UsersPage() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 font-mono">
                           {u.created_by_code || '-'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-600 font-mono">
+                          {u.created_at ? (
+                            <div className="flex flex-col">
+                              <span className="font-semibold text-slate-700">{new Date(u.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+                              <span className="text-[10px] text-slate-400">{new Date(u.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
+                            </div>
+                          ) : (
+                            <span className="text-slate-400">-</span>
+                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <Link

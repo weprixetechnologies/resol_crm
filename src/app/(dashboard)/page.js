@@ -3,10 +3,23 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { fetchApi } from '@/lib/api';
-import { Users, Shield, UserX, Archive, Loader2, UserPlus, Upload, Database, Activity, Clock, Filter } from 'lucide-react';
+import { Users, Shield, UserX, Archive, Loader2, UserPlus, Upload, Database, Activity, Clock, Filter, BarChart2, ChevronDown, Check, Search, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { AreaChart, Area, BarChart, Bar, Legend, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { format, parseISO } from 'date-fns';
+
+const STAFF_COLORS = [
+  '#6366f1', // Indigo
+  '#10b981', // Emerald
+  '#f59e0b', // Amber
+  '#8b5cf6', // Purple
+  '#f43f5e', // Rose
+  '#06b6d4', // Cyan
+  '#3b82f6', // Blue
+  '#ec4899', // Pink
+  '#14b8a6', // Teal
+  '#84cc16'  // Lime
+];
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -16,13 +29,17 @@ export default function DashboardPage() {
   const [timeRange, setTimeRange] = useState('7d');
   const [contactValue, setContactValue] = useState(24);
   const [contactUnit, setContactUnit] = useState('hours');
-  const [staffCode, setStaffCode] = useState('');
+  const [selectedStaffCodes, setSelectedStaffCodes] = useState([]);
+  const [isStaffDropdownOpen, setIsStaffDropdownOpen] = useState(false);
+  const [staffSearchQuery, setStaffSearchQuery] = useState('');
+  const [contactChartType, setContactChartType] = useState('histogram'); // 'histogram' or 'area'
 
   useEffect(() => {
     async function loadStats() {
       setLoading(true);
+      const staffParam = selectedStaffCodes.join(',');
       const res = await fetchApi(
-        `/dashboard/stats?range=${timeRange}&contactValue=${contactValue}&contactUnit=${contactUnit}&staffCode=${encodeURIComponent(staffCode)}`
+        `/dashboard/stats?range=${timeRange}&contactValue=${contactValue}&contactUnit=${contactUnit}&staffCodes=${encodeURIComponent(staffParam)}`
       );
       if (res.success) {
         setStats(res.data);
@@ -33,7 +50,7 @@ export default function DashboardPage() {
     }
     const timer = setTimeout(loadStats, 300);
     return () => clearTimeout(timer);
-  }, [timeRange, contactValue, contactUnit, staffCode]);
+  }, [timeRange, contactValue, contactUnit, selectedStaffCodes]);
 
   if (loading && !stats) {
     return (
@@ -117,7 +134,7 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* Contacts Created Analytics Section (Dynamic Input & Hours/Days Selector) */}
+      {/* Contacts Created Analytics Section (Histogram & Multi-Staff Comparison) */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col relative">
         {loading && stats && (
           <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] z-10 flex items-center justify-center">
@@ -125,45 +142,63 @@ export default function DashboardPage() {
           </div>
         )}
 
-        <div className="px-6 py-5 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/50">
+        <div className="px-6 py-5 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-50/50">
           <div className="flex items-center space-x-3">
             <div className="p-2.5 bg-emerald-100 text-emerald-600 rounded-xl">
               <UserPlus className="w-5 h-5" />
             </div>
             <div>
               <h3 className="text-lg font-bold text-slate-900 tracking-tight">Contacts Created Stats</h3>
-              <p className="text-xs text-slate-500">Track how many contacts were created within a specific timeframe</p>
+              <p className="text-xs text-slate-500">Compare contact creation across staff members in real-time</p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {/* Chart Type Toggle (Histogram / BarChart vs Area) */}
+            <div className="flex items-center bg-slate-200/60 p-1 rounded-xl text-xs font-medium mr-1">
+              <button
+                type="button"
+                onClick={() => setContactChartType('histogram')}
+                className={`px-2.5 py-1 rounded-lg transition-all flex items-center cursor-pointer ${contactChartType === 'histogram' ? 'bg-white text-indigo-600 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'}`}
+              >
+                <BarChart2 className="w-3.5 h-3.5 mr-1" /> Histogram
+              </button>
+              <button
+                type="button"
+                onClick={() => setContactChartType('area')}
+                className={`px-2.5 py-1 rounded-lg transition-all flex items-center cursor-pointer ${contactChartType === 'area' ? 'bg-white text-indigo-600 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'}`}
+              >
+                <Activity className="w-3.5 h-3.5 mr-1" /> Area
+              </button>
+            </div>
+
             {/* Quick Presets */}
             <div className="flex items-center bg-slate-200/60 p-1 rounded-xl text-xs font-medium mr-1">
               <button
                 type="button"
                 onClick={() => { setContactValue(6); setContactUnit('hours'); }}
-                className={`px-2.5 py-1 rounded-lg transition-all ${contactValue === 6 && contactUnit === 'hours' ? 'bg-white text-indigo-600 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'}`}
+                className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${contactValue === 6 && contactUnit === 'hours' ? 'bg-white text-indigo-600 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'}`}
               >
                 6h
               </button>
               <button
                 type="button"
                 onClick={() => { setContactValue(24); setContactUnit('hours'); }}
-                className={`px-2.5 py-1 rounded-lg transition-all ${contactValue === 24 && contactUnit === 'hours' ? 'bg-white text-indigo-600 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'}`}
+                className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${contactValue === 24 && contactUnit === 'hours' ? 'bg-white text-indigo-600 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'}`}
               >
                 24h
               </button>
               <button
                 type="button"
                 onClick={() => { setContactValue(7); setContactUnit('days'); }}
-                className={`px-2.5 py-1 rounded-lg transition-all ${contactValue === 7 && contactUnit === 'days' ? 'bg-white text-indigo-600 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'}`}
+                className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${contactValue === 7 && contactUnit === 'days' ? 'bg-white text-indigo-600 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'}`}
               >
                 7d
               </button>
               <button
                 type="button"
                 onClick={() => { setContactValue(30); setContactUnit('days'); }}
-                className={`px-2.5 py-1 rounded-lg transition-all ${contactValue === 30 && contactUnit === 'days' ? 'bg-white text-indigo-600 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'}`}
+                className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${contactValue === 30 && contactUnit === 'days' ? 'bg-white text-indigo-600 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'}`}
               >
                 30d
               </button>
@@ -190,82 +225,177 @@ export default function DashboardPage() {
               </select>
             </div>
 
-            {/* Quick Staff Code Filter */}
-            <div className="flex items-center space-x-1.5 bg-white border border-slate-200 rounded-xl px-3 py-1.5 shadow-xs focus-within:ring-2 focus-within:ring-indigo-500">
-              <Filter className="w-3.5 h-3.5 text-slate-400" />
-              <span className="text-xs font-semibold text-slate-500 hidden sm:inline">Staff Code:</span>
-              {stats?.contactsCreatedStats?.staffList && stats.contactsCreatedStats.staffList.length > 0 ? (
-                <select
-                  value={staffCode}
-                  onChange={(e) => setStaffCode(e.target.value)}
-                  className="text-xs font-semibold text-indigo-600 bg-transparent focus:outline-none cursor-pointer font-mono max-w-[120px] truncate"
-                >
-                  <option value="">All Staff</option>
-                  {stats.contactsCreatedStats.staffList.map((s) => (
-                    <option key={s.id} value={s.staff_code}>
-                      {s.staff_code} ({s.name})
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  type="text"
-                  placeholder="e.g. ST01"
-                  value={staffCode}
-                  onChange={(e) => setStaffCode(e.target.value)}
-                  className="w-16 text-xs font-bold font-mono text-indigo-600 focus:outline-none bg-transparent uppercase"
-                />
-              )}
-              {staffCode && (
-                <button
-                  type="button"
-                  onClick={() => setStaffCode('')}
-                  className="text-slate-400 hover:text-slate-600 text-xs font-bold px-0.5"
-                  title="Clear Staff Code Filter"
-                >
-                  ✕
-                </button>
+            {/* Multi-Select Staff Code Popover */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsStaffDropdownOpen(!isStaffDropdownOpen)}
+                className="flex items-center space-x-1.5 bg-white border border-slate-200 rounded-xl px-3 py-1.5 shadow-xs text-xs font-semibold text-slate-700 hover:border-indigo-300 transition-colors cursor-pointer"
+              >
+                <Filter className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Staff:</span>
+                <span className="font-mono text-indigo-600 font-bold max-w-[120px] truncate">
+                  {selectedStaffCodes.length === 0 ? 'All Staff' : selectedStaffCodes.length === 1 ? selectedStaffCodes[0] : `${selectedStaffCodes.length} Selected`}
+                </span>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+              </button>
+
+              {isStaffDropdownOpen && (
+                <div className="absolute right-0 mt-1 w-64 bg-white border border-slate-200 rounded-2xl shadow-xl z-30 p-3 space-y-2 text-xs">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100 font-bold text-slate-800">
+                    <span>Select Staff Codes</span>
+                    {selectedStaffCodes.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedStaffCodes([])}
+                        className="text-[11px] text-rose-600 hover:text-rose-800 font-semibold cursor-pointer"
+                      >
+                        Clear All
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2" />
+                    <input
+                      type="text"
+                      placeholder="Search staff code or name..."
+                      value={staffSearchQuery}
+                      onChange={e => setStaffSearchQuery(e.target.value)}
+                      className="w-full pl-8 pr-2.5 py-1 border border-slate-200 rounded-lg text-xs font-medium focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
+                    {(stats?.contactsCreatedStats?.staffList || [])
+                      .filter(s => 
+                        s.staff_code.toLowerCase().includes(staffSearchQuery.toLowerCase()) || 
+                        s.name.toLowerCase().includes(staffSearchQuery.toLowerCase())
+                      )
+                      .map(s => {
+                        const isChecked = selectedStaffCodes.includes(s.staff_code);
+                        return (
+                          <label
+                            key={s.id}
+                            className={`flex items-center justify-between p-1.5 rounded-lg cursor-pointer transition-colors ${
+                              isChecked ? 'bg-indigo-50 text-indigo-900 font-bold' : 'hover:bg-slate-50 text-slate-700'
+                            }`}
+                          >
+                            <div className="flex items-center space-x-2 truncate">
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => {
+                                  if (isChecked) {
+                                    setSelectedStaffCodes(selectedStaffCodes.filter(c => c !== s.staff_code));
+                                  } else {
+                                    setSelectedStaffCodes([...selectedStaffCodes, s.staff_code]);
+                                  }
+                                }}
+                                className="h-3.5 w-3.5 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
+                              />
+                              <span className="font-mono text-xs">{s.staff_code}</span>
+                              <span className="text-[11px] text-slate-500 truncate">({s.name})</span>
+                            </div>
+                          </label>
+                        );
+                      })}
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedStaffCodes(stats?.contactsCreatedStats?.staffList?.map(s => s.staff_code) || [])}
+                      className="text-indigo-600 hover:text-indigo-800 font-bold cursor-pointer"
+                    >
+                      Select All ({stats?.contactsCreatedStats?.staffList?.length || 0})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsStaffDropdownOpen(false)}
+                      className="px-2.5 py-1 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 cursor-pointer"
+                    >
+                      Apply
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
           </div>
         </div>
 
         <div className="p-6 space-y-6">
-          <div className="flex items-center justify-between bg-emerald-50/60 border border-emerald-100 rounded-2xl p-4 sm:p-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-emerald-50/60 border border-emerald-100 rounded-2xl p-4 sm:p-5 gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700">
                 Contacts Created in Last {contactValue} {contactUnit === 'hours' ? (contactValue === 1 ? 'Hour' : 'Hours') : (contactValue === 1 ? 'Day' : 'Days')}
-                {staffCode ? ` • Filtered by Staff Code: ${staffCode}` : ''}
+                {selectedStaffCodes.length > 0 ? ` • Filtered by Staff: ${selectedStaffCodes.join(', ')}` : ''}
               </p>
               <p className="text-3xl font-extrabold text-slate-900 mt-1">
                 {stats?.contactsCreatedStats?.total || 0}
                 <span className="text-sm font-medium text-slate-500 ml-2">contacts</span>
               </p>
             </div>
-            <div className="h-12 w-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shadow-md">
+            <div className="h-12 w-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shadow-md flex-shrink-0">
               <Users className="w-6 h-6" />
             </div>
           </div>
 
-          <div className="h-[250px]">
+          <div className="h-[280px]">
             {contactChartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={contactChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorContacts" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} dy={10} />
-                  <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} allowDecimals={false} />
-                  <Tooltip 
-                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                    itemStyle={{ color: '#0f172a', fontWeight: 'bold' }}
-                  />
-                  <Area type="monotone" dataKey="count" name="Contacts Created" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorContacts)" />
-                </AreaChart>
+                {contactChartType === 'histogram' ? (
+                  <BarChart data={contactChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} dy={10} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} allowDecimals={false} />
+                    <Tooltip 
+                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                      itemStyle={{ fontWeight: 'bold' }}
+                    />
+                    <Legend wrapperStyle={{ paddingTop: '10px' }} />
+                    {selectedStaffCodes.length > 0 ? (
+                      selectedStaffCodes.map((code, idx) => (
+                        <Bar
+                          key={code}
+                          dataKey={code}
+                          name={code}
+                          fill={STAFF_COLORS[idx % STAFF_COLORS.length]}
+                          radius={[4, 4, 0, 0]}
+                        />
+                      ))
+                    ) : (
+                      <Bar dataKey="count" name="Total Contacts" fill="#10b981" radius={[4, 4, 0, 0]} />
+                    )}
+                  </BarChart>
+                ) : (
+                  <AreaChart data={contactChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} dy={10} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} allowDecimals={false} />
+                    <Tooltip 
+                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                      itemStyle={{ fontWeight: 'bold' }}
+                    />
+                    <Legend wrapperStyle={{ paddingTop: '10px' }} />
+                    {selectedStaffCodes.length > 0 ? (
+                      selectedStaffCodes.map((code, idx) => (
+                        <Area
+                          key={code}
+                          type="monotone"
+                          dataKey={code}
+                          name={code}
+                          stroke={STAFF_COLORS[idx % STAFF_COLORS.length]}
+                          fill={STAFF_COLORS[idx % STAFF_COLORS.length]}
+                          fillOpacity={0.2}
+                          strokeWidth={2.5}
+                        />
+                      ))
+                    ) : (
+                      <Area type="monotone" dataKey="count" name="Total Contacts" stroke="#10b981" fill="#10b981" fillOpacity={0.2} strokeWidth={2.5} />
+                    )}
+                  </AreaChart>
+                )}
               </ResponsiveContainer>
             ) : (
               <div className="h-full flex items-center justify-center text-slate-400 text-sm">
@@ -273,6 +403,35 @@ export default function DashboardPage() {
               </div>
             )}
           </div>
+
+          {/* Staff Comparison Breakdown Pills */}
+          {stats?.contactsCreatedStats?.staffBreakdown?.length > 0 && (
+            <div className="pt-4 border-t border-slate-100 space-y-2">
+              <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">Staff Contacts Comparison</p>
+              <div className="flex flex-wrap gap-2">
+                {stats.contactsCreatedStats.staffBreakdown.map((sb, idx) => {
+                  const color = selectedStaffCodes.length > 0 
+                    ? (selectedStaffCodes.includes(sb.staff_code) 
+                        ? STAFF_COLORS[selectedStaffCodes.indexOf(sb.staff_code) % STAFF_COLORS.length] 
+                        : '#94a3b8')
+                    : STAFF_COLORS[idx % STAFF_COLORS.length];
+                  return (
+                    <div
+                      key={sb.staff_code}
+                      className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs shadow-2xs"
+                    >
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
+                      <span className="font-mono font-bold text-slate-800">{sb.staff_code}</span>
+                      <span className="text-slate-500 font-medium truncate max-w-[120px]">({sb.staff_name})</span>
+                      <span className="font-extrabold text-indigo-700 bg-white border border-slate-200 rounded-md px-2 py-0.5 ml-1">
+                        {sb.count}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
