@@ -766,8 +766,17 @@ export default function TemplatesPage() {
                     </div>
 
                     {blocks.length === 0 ? (
-                      <div className="text-center py-16 text-slate-400 text-xs">
-                        Canvas is empty. Add elements from left panel.
+                      <div className="text-center py-12 px-4 bg-white rounded-xl border border-slate-200 space-y-3 my-4">
+                        <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto">
+                          <Code className="w-5 h-5" />
+                        </div>
+                        <h4 className="font-bold text-slate-800 text-sm">Custom HTML Email Template</h4>
+                        <p className="text-xs text-slate-500 max-w-xs mx-auto leading-relaxed">
+                          This template uses direct HTML code. Edit its exact HTML under <strong className="text-indigo-600">Raw HTML Code</strong> tab or simulate rendering in <strong className="text-indigo-600">Live Preview</strong>.
+                        </p>
+                        <p className="text-[11px] text-slate-400">
+                          To build a visual block layout from scratch, add elements from the left panel.
+                        </p>
                       </div>
                     ) : (
                       <div className="space-y-2.5">
