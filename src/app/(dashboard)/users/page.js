@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { fetchApi, api } from '@/lib/api';
+import Cookies from 'js-cookie';
 import Link from 'next/link';
 import { Search, Plus, ChevronLeft, ChevronRight, Loader2, UserPlus, Eye, AlertTriangle, Filter, X, Download, Trash2, Mail, Calendar, RefreshCw, CheckCircle2, AlertCircle, Check, ShieldAlert, Zap, Clock, Cpu } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
@@ -308,23 +309,22 @@ export default function UsersPage() {
   const handleExport = async () => {
     setExporting(true);
     try {
-      let url = `${process.env.NEXT_PUBLIC_API_URL || '/api'}/users/export?search=${encodeURIComponent(search)}`;
+      const params = new URLSearchParams();
+      if (search) params.append('search', search);
+      
       Object.keys(advancedFilters).forEach(key => {
         if (advancedFilters[key] && advancedFilters[key] !== 'all') {
-          url += `&${key}=${encodeURIComponent(advancedFilters[key])}`;
+          params.append(key, advancedFilters[key]);
         }
       });
 
-      const token = localStorage.getItem('token');
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+      const response = await api.get(`/users/export?${params.toString()}`, {
+        responseType: 'blob'
       });
 
-      if (!response.ok) throw new Error('Export failed');
-
-      const blob = await response.blob();
+      const blob = new Blob([response.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
       const downloadUrl = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = downloadUrl;
@@ -332,8 +332,10 @@ export default function UsersPage() {
       document.body.appendChild(a);
       a.click();
       a.remove();
+      window.URL.revokeObjectURL(downloadUrl);
     } catch (err) {
-      alert(err.message || 'Error exporting customer data');
+      console.error('Export error:', err);
+      alert(err.response?.data?.message || err.message || 'Error exporting customer data');
     } finally {
       setExporting(false);
     }
